@@ -1,0 +1,27 @@
+{
+  "id": "global.echo.say",
+  "summary": "Return a message through the built-in echo provider",
+  "provider": "echo",
+  "adapterType": "internal",
+  "executionTarget": {
+    "handler": "echo.say"
+  },
+  "argsSchema": {
+    "type": "object",
+    "properties": {
+      "message": {
+        "type": "string"
+      }
+    }
+  },
+  "outputModes": ["text", "json"],
+  "sideEffects": "none",
+  "scope": "global",
+  "lifecycleState": "active",
+  "defaults": {},
+  "policies": [],
+  "owner": "module:echo",
+  "examples": [
+    "ax run echo say --message hello"
+  ]
+}

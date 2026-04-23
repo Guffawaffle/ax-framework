@@ -1,0 +1,12 @@
+# Local agent/session state
+.codex
+
+# Windows alternate data stream metadata copied from downloaded files
+*:Zone.Identifier
+
+# Node dependency/install outputs
+node_modules/
+npm-debug.log*
+
+# OS/editor noise
+.DS_Store

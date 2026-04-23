@@ -1,0 +1,20 @@
+{
+  "toolspace": "awa",
+  "moduleMounts": {
+    "lex": {
+      "source": "global.lex",
+      "mode": "proxy",
+      "capabilities": [
+        "frame.recall",
+        "frame.write",
+        "receipt.show"
+      ],
+      "defaults": {
+        "namespace": "awa"
+      },
+      "policies": [
+        "require_workspace_binding"
+      ]
+    }
+  }
+}

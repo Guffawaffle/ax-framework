@@ -1,0 +1,27 @@
+{
+  "id": "global.lex.frame.recall",
+  "summary": "Recall frames from the global Lex store",
+  "provider": "lex",
+  "adapterType": "cli",
+  "executionTarget": {
+    "command": "lex",
+    "args": ["frame", "recall", "--json"]
+  },
+  "argsSchema": {
+    "type": "object",
+    "properties": {
+      "query": { "type": "string" },
+      "limit": { "type": "integer", "minimum": 1 }
+    }
+  },
+  "outputModes": ["json", "text"],
+  "sideEffects": "none",
+  "scope": "global",
+  "lifecycleState": "active",
+  "defaults": {},
+  "policies": [],
+  "owner": "module:lex",
+  "examples": [
+    "ax lex frame recall --query recent --limit 5"
+  ]
+}

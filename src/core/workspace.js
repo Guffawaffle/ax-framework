@@ -9,7 +9,7 @@
 //                        ax.workspace.json
 //   4. Marker file walk: nearest ancestor of the script's own location
 //                        that contains ax.workspace.json (so /usr/local/bin/axf
-//                        invoked from /tmp still finds /srv/ax)
+//                        invoked from /tmp still finds /srv/axf)
 //   5. Fallback:         cwd
 //
 // The marker file is a tiny JSON document (see ax.workspace.json at the
@@ -69,9 +69,9 @@ function walkForMarker(startDir) {
 
 function defaultScriptDir() {
     try {
-        // Resolve the real path of bin/ax.js (de-symlinks /usr/local/bin/axf
-        // -> /srv/ax/bin/ax.js) so the marker walk starts at the install
-        // location, not the symlink directory.
+        // Resolve the real path of bin/axf.js (de-symlinks
+        // /usr/local/bin/axf -> /srv/axf/bin/axf.js) so the marker walk
+        // starts at the install location, not the symlink directory.
         const here = fileURLToPath(import.meta.url);
         const real = realpathSync(here);
         return path.dirname(real);

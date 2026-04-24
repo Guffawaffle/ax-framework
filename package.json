@@ -5,10 +5,10 @@
   "type": "module",
   "description": "Manifest-driven AX launcher and toolspace framework prototype.",
   "bin": {
-    "ax": "./bin/ax.js"
+    "axf": "./bin/axf.js"
   },
   "scripts": {
-    "ax": "node bin/ax.js",
+    "axf": "node bin/axf.js",
     "test": "node --test"
   },
   "engines": {

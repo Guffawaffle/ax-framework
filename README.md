@@ -11,12 +11,13 @@ open adapter contract any agent can extend.
 
 ## Install (alpha)
 
-The framework lives at `/srv/ax/`. While it shares its name with
-the [Majel project's `ax` tool](/srv/majel/), the framework's binary
-is exposed on PATH as `axf` to avoid collision:
+The framework lives at `/srv/axf/` (the GitHub repo is
+[`Guffawaffle/ax-framework`](https://github.com/Guffawaffle/ax-framework)).
+While it shares its name with the [Majel project's `ax` tool](/srv/majel/),
+the framework's binary is exposed on PATH as `axf` to avoid collision:
 
 ```sh
-sudo ln -sfn /srv/ax/bin/ax.js /usr/local/bin/axf
+sudo ln -sfn /srv/axf/bin/axf.js /usr/local/bin/axf
 ```
 
 `axf` finds its workspace by walking up from the current directory for
@@ -87,7 +88,7 @@ is a small, complete, copy-and-modify example.
 
 ```
 ax.workspace.json               # workspace marker
-bin/ax.js                       # CLI entry (symlinked as /usr/local/bin/axf)
+bin/axf.js                      # CLI entry (symlinked as /usr/local/bin/axf)
 src/cli/                        # CLI parsing + main dispatch
 src/core/                       # registry, resolver, executor, adapters, doctor, policy
 adapters/<type>/                # type adapters (internal, cli, ...)

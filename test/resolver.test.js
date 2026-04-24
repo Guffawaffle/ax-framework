@@ -56,7 +56,7 @@ test("executes a mounted capability with injected defaults", async () => {
     const resolved = resolveCapability(registry, ["toy", "echo", "say"], {
         args: { message: "hello" }
     });
-    const runtime = { workspace: { root: "/srv/ax", viaMarker: true, source: "cwd-marker" } };
+    const runtime = { workspace: { root: "/srv/axf", viaMarker: true, source: "cwd-marker" } };
     const result = await executeResolvedCapability(resolved, { adapters, runtime });
 
     assert.equal(result.ok, true);

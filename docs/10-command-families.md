@@ -1,0 +1,123 @@
+# Command Families
+
+A **command family** is a provider's existing command vocabulary
+described as one declarative manifest. Authoring one capability file
+per `git` subcommand (or `gh`, `kubectl`, `docker compose`) is
+tedious and brittle. Family manifests let you import an entire
+vocabulary at once and materialize only the commands you need to
+override.
+
+## Family manifest
+
+`manifests/families/<name>.family.json`:
+
+```json
+{
+  "manifestVersion": "axf/v0",
+  "family": "git",
+  "scope": "global",
+  "provider": "git",
+  "adapterType": "cli",
+  "executionTarget": { "command": "git" },
+  "providerArgStyle": "double-dash-kebab",
+  "lifecycleState": "active",
+  "owner": "import",
+  "commands": {
+    "status": {
+      "summary": "Show working tree status",
+      "executionTarget": { "command": "git", "args": ["status"] },
+      "args": {
+        "porcelain": { "type": "boolean" },
+        "branch": { "type": "string", "providerFlag": "--branch" }
+      }
+    }
+  }
+}
+```
+
+The registry synthesizes one capability per command at load time. For a
+family with `scope: "global"`, command `status` becomes capability
+`global.git.status`. Synthesized capabilities carry:
+
+- `origin: "imported"`
+- `sourceFamily: { family, command, manifestPath }`
+- `argMap: { <publicName>: <providerFlag> }`
+
+Run `axf inspect global.git.status` to see all of these.
+
+## Public-to-provider arg mapping
+
+Each command's args go through three layers when computing
+`providerFlag`:
+
+1. **Per-arg override** — `args.<name>.providerFlag: "--my-flag"`
+2. **Family-level override** — `argMap: { "<publicName>": "--my-flag" }`
+3. **Style derivation** from `providerArgStyle`:
+   - `"double-dash-kebab"` (default) → `kebab-case` → `--kebab-case`
+   - `"powershell-pascal"` → `kebab-case` → `-PascalCase`
+
+The cli type adapter uses `capability.argMap` when constructing the
+provider command line. Public arg names are kept stable across providers;
+the provider flag changes underneath.
+
+### Reserved names
+
+These public arg names are reserved by axf and rejected at family load:
+
+```text
+json, workspace, any-lifecycle, allow-draft, include-drafts, all
+```
+
+If a provider uses these, expose them under a different public name and
+map back via `providerFlag`.
+
+## Materialization
+
+Most commands stay imported. When you need to override a command —
+custom defaults, a different launcher, narrower argsSchema — materialize
+just that one:
+
+```sh
+axf init materialize git status
+```
+
+This writes `manifests/capabilities/global.git.status.json` derived
+from the family entry, with `lifecycleState: "draft"` and the
+`sourceFamily` back-reference preserved.
+
+The materialized file shadows the imported synthesis. `inspect` reports
+`origin: materialized`. Edit it freely.
+
+## Drift
+
+Once a command is materialized, it can drift from the family it came
+from (provider added a new flag; you renamed an arg locally; the
+family changed `executionTarget`). `axf doctor` runs drift detection
+and reports each kind:
+
+| Kind | Meaning |
+|---|---|
+| `missing-source` | `sourceFamily` references a family or command that no longer exists |
+| `args-added` | family declares args the materialized capability does not |
+| `args-removed` | materialized capability declares args the family no longer has |
+| `arg-flag-changed` | a shared arg's `providerFlag` differs between family-derived map and the materialized `argMap` |
+| `execution-target-changed` | family's `executionTarget` no longer matches the materialized capability |
+
+`missing-source` is reported as an error; the others are warnings.
+Resolve drift either by re-materializing (delete the file and run
+`axf init materialize` again) or by editing the materialized file to
+bring it back in line.
+
+## Workflow
+
+```text
+import (write family manifest)
+  ↓
+inspect    (axf inspect <id> --json)
+  ↓
+refine     (edit family manifest in place)
+  ↓
+materialize  (only what you must override; axf init materialize)
+  ↓
+promote    (axf promote <id> --to active)
+```

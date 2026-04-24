@@ -13,15 +13,59 @@ toolspaces.
 
 The framework lives at `/srv/axf/` (the GitHub repo is
 [`Guffawaffle/ax-framework`](https://github.com/Guffawaffle/ax-framework)).
+
+### Linux / macOS
+
 Expose the CLI on PATH with:
 
 ```sh
 sudo ln -sfn /srv/axf/bin/axf.js /usr/local/bin/axf
 ```
 
+### Windows
+
+Three supported entry shapes — pick the one that matches how the
+workspace runs axf.
+
+**1. npm-installed shim (recommended).** From a clone of the framework:
+
+```powershell
+npm install --global .
+```
+
+npm writes `axf.cmd` and `axf.ps1` shims into the global npm bin
+directory (`%AppData%\npm` on Windows, already on PATH for most
+installs). Both shims dispatch to `bin/axf.js` via the bundled Node
+runtime, so PowerShell, cmd, and Git Bash all resolve `axf` to the
+same binary.
+
+**2. PowerShell function** (no global install):
+
+```powershell
+function axf { node 'C:\src\ax-framework\bin\axf.js' @args }
+```
+
+Add to `$PROFILE` to persist.
+
+**3. cmd shim** (`axf.cmd` somewhere on PATH):
+
+```cmd
+@echo off
+node "C:\src\ax-framework\bin\axf.js" %*
+```
+
+### Workspace discovery
+
 `axf` finds its workspace by walking up from the current directory for
 an `axf.workspace.json` marker, then by walking up from the binary's own
-location. From any directory:
+location. Override on any platform:
+
+- POSIX: `AXF_WORKSPACE=/path/to/workspace axf doctor`
+- PowerShell: `$env:AXF_WORKSPACE = 'C:\src\my-ws'; axf doctor`
+- cmd: `set AXF_WORKSPACE=C:\src\my-ws & axf doctor`
+- Any shell: `axf --workspace C:\src\my-ws doctor`
+
+From any directory once installed:
 
 ```sh
 axf doctor
@@ -31,9 +75,6 @@ axf run echo say --message hello
 axf run toy echo say --message hello
 axf init capability global.acme.status
 ```
-
-`AXF_WORKSPACE=<path>` or `--workspace <path>` overrides discovery.
-
 ## What's wired up
 
 ### Built-in adapters
@@ -112,6 +153,16 @@ test/                           # node:test, zero-dep
   alpha implementation milestones
 9. [`docs/08-adapter-folder-shape.md`](docs/08-adapter-folder-shape.md)
    — the concrete file contract
+10. [`docs/09-launch-plans.md`](docs/09-launch-plans.md) —
+    interpreter-aware launch plans, env-bound roots, fallback paths
+11. [`docs/10-command-families.md`](docs/10-command-families.md) —
+    family imports, public-to-provider arg mapping, materialization,
+    drift
+12. [`docs/11-normalization-guidance.md`](docs/11-normalization-guidance.md)
+    — JSON-first vs text-first providers, when to write a provider
+    adapter
+13. [`docs/12-layered-docs.md`](docs/12-layered-docs.md) — caller /
+    integrator / author paths through the docs
 
 ## Tests
 

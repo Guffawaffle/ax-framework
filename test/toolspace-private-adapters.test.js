@@ -15,8 +15,8 @@ import { executeResolvedCapability } from "../src/core/executor.js";
 async function bootstrap() {
     const root = await mkdtemp(path.join(os.tmpdir(), "ax-tspriv-"));
     await writeFile(
-        path.join(root, "ax.workspace.json"),
-        JSON.stringify({ manifestVersion: "ax/v0", name: "fixture" })
+        path.join(root, "axf.workspace.json"),
+        JSON.stringify({ manifestVersion: "axf/v0", name: "fixture" })
     );
     await mkdir(path.join(root, "manifests", "capabilities"), { recursive: true });
     await mkdir(path.join(root, "manifests", "toolspaces"), { recursive: true });
@@ -30,7 +30,7 @@ async function writeGlobalEcho(root) {
     await writeFile(
         path.join(dir, "adapter.manifest.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             kind: "type-adapter",
             type: "internal",
             entry: "index.js",
@@ -52,7 +52,7 @@ async function writeGlobalEcho(root) {
     await writeFile(
         path.join(root, "manifests", "capabilities", "global.echo.say.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             id: "global.echo.say",
             summary: "echo",
             provider: "internal",
@@ -76,7 +76,7 @@ async function writeGlobalEcho(root) {
     await writeFile(
         path.join(root, "manifests", "toolspaces", "tly.mount.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             toolspace: "tly",
             lifecycleState: "active",
             moduleMounts: {
@@ -93,7 +93,7 @@ async function writeToolspacePrivateInternal(root) {
     await writeFile(
         path.join(dir, "adapter.manifest.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             kind: "type-adapter",
             type: "internal",
             entry: "index.js",

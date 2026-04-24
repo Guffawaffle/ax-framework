@@ -1,4 +1,4 @@
-// Policy hook surface for AX.
+// Policy hook surface for axf.
 //
 // Policies are declared on capabilities and mounts. They evaluate at
 // execution time with a runtime context describing the resolved
@@ -35,7 +35,7 @@ export function isKnown(name) {
 }
 
 const POLICY_HANDLERS = {
-    // require_workspace_binding: capability must run with AX bound to a
+    // require_workspace_binding: capability must run with axf bound to a
     // real workspace marker (not the cwd fallback). Toolspace-mounted and
     // workspace-local capabilities also implicitly require this when the
     // policy is declared.

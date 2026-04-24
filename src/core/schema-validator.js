@@ -1,4 +1,4 @@
-// Tiny JSON Schema subset for AX v0 argsSchema validation and coercion.
+// Tiny JSON Schema subset for axf v0 argsSchema validation and coercion.
 // Supported: type (string/number/integer/boolean/object/array),
 // required, properties, enum, minimum, maximum, minLength,
 // additionalProperties (defaults to true).

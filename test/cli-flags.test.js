@@ -15,8 +15,8 @@ import { resolveCapability } from "../src/core/resolver.js";
 async function bootstrap({ withInternal = true } = {}) {
     const root = await mkdtemp(path.join(os.tmpdir(), "ax-cli-flag-"));
     await writeFile(
-        path.join(root, "ax.workspace.json"),
-        JSON.stringify({ manifestVersion: "ax/v0", name: "fixture" })
+        path.join(root, "axf.workspace.json"),
+        JSON.stringify({ manifestVersion: "axf/v0", name: "fixture" })
     );
     await mkdir(path.join(root, "manifests", "capabilities"), { recursive: true });
     if (withInternal) {
@@ -25,7 +25,7 @@ async function bootstrap({ withInternal = true } = {}) {
         await writeFile(
             path.join(adapterDir, "adapter.manifest.json"),
             JSON.stringify({
-                manifestVersion: "ax/v0",
+                manifestVersion: "axf/v0",
                 kind: "type-adapter",
                 type: "internal",
                 entry: "index.js",
@@ -48,7 +48,7 @@ async function bootstrap({ withInternal = true } = {}) {
 
 function basicCap(overrides = {}) {
     return {
-        manifestVersion: "ax/v0",
+        manifestVersion: "axf/v0",
         id: "global.demo.thing",
         summary: "demo",
         provider: "demo",
@@ -175,7 +175,7 @@ test("promote refuses mounted capability ids", async () => {
     await writeFile(
         path.join(root, "manifests", "toolspaces", "tly.mount.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             toolspace: "tly",
             lifecycleState: "active",
             moduleMounts: {
@@ -221,7 +221,7 @@ test("mounted capability inherits source policies plus mount policies", async ()
     await writeFile(
         path.join(root, "manifests", "toolspaces", "tly.mount.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             toolspace: "tly",
             lifecycleState: "active",
             moduleMounts: {

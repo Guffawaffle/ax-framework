@@ -33,7 +33,7 @@ export async function main(argv, env = {}) {
     }
 
     if (!COMMANDS.has(command)) {
-        throw new AxError(`unknown command '${command}'. Run 'ax help'.`, 2);
+        throw new AxError(`unknown command '${command}'. Run 'axf help'.`, 2);
     }
 
     if (command === "init") {
@@ -210,7 +210,7 @@ async function initToolspace(rootDir, name) {
     assertSafeName(name, "toolspace");
     const filePath = path.join(rootDir, "manifests", "toolspaces", `${name}.mount.json`);
     const manifest = {
-        manifestVersion: "ax/v0",
+        manifestVersion: "axf/v0",
         toolspace: name,
         lifecycleState: "draft",
         moduleMounts: {}
@@ -228,9 +228,9 @@ async function initCapability(rootDir, id) {
             : prefix === "workspace" ? "workspace-local"
                 : "toolspace-local";
     const manifest = {
-        manifestVersion: "ax/v0",
+        manifestVersion: "axf/v0",
         id,
-        summary: "Draft AX capability",
+        summary: "Draft axf capability",
         provider: "draft",
         adapterType: "internal",
         executionTarget: { handler: "draft.todo" },
@@ -282,16 +282,16 @@ function adapterRoot(rootDir, { toolspace }) {
 async function scaffoldTypeAdapter(rootDir, type, { toolspace = null } = {}) {
     const dir = path.join(adapterRoot(rootDir, { toolspace }), type);
     const manifest = {
-        manifestVersion: "ax/v0",
+        manifestVersion: "axf/v0",
         kind: "type-adapter",
         type,
-        summary: `Draft AX type adapter for ${type} execution`,
+        summary: `Draft axf type adapter for ${type} execution`,
         entry: "index.js",
         supportedExecutionTargets: [],
         lifecycleState: "draft",
         owner: "draft"
     };
-    const indexJs = `// Draft AX type adapter for '${type}'.
+    const indexJs = `// Draft axf type adapter for '${type}'.
 // Implement execute(resolved) to run a resolved capability and return
 // a normalized result: { ok, data | error, meta }.
 // See docs/04-adapter-contract.md and docs/08-adapter-folder-shape.md.
@@ -315,16 +315,16 @@ export async function execute(resolved) {
 async function scaffoldProviderAdapter(rootDir, name, composes, { toolspace = null } = {}) {
     const dir = path.join(adapterRoot(rootDir, { toolspace }), name);
     const manifest = {
-        manifestVersion: "ax/v0",
+        manifestVersion: "axf/v0",
         kind: "provider",
         name,
         composes,
-        summary: `Draft AX provider adapter for ${name} (composes ${composes})`,
+        summary: `Draft axf provider adapter for ${name} (composes ${composes})`,
         entry: "index.js",
         lifecycleState: "draft",
         owner: "draft"
     };
-    const indexJs = `// Draft AX provider adapter '${name}'.
+    const indexJs = `// Draft axf provider adapter '${name}'.
 // Provider adapters wrap a type adapter and normalize a provider's
 // quirks (e.g. envelope shape, error conventions). The framework calls
 // execute(resolved, ctx) when a capability declares
@@ -396,40 +396,40 @@ async function doctorCommand(registry, adapters, tokens, ws = null) {
 }
 
 function printHelp() {
-    console.log(`AX framework prototype
+    console.log(`axf framework prototype
 
 Global flags:
-  --workspace <path>     Workspace root (overrides marker-file lookup and AX_WORKSPACE).
+    --workspace <path>     Workspace root (overrides marker-file lookup and AXF_WORKSPACE).
 
 Usage:
-  ax list [--all|--any-lifecycle] [--json]
-  ax inspect <id-or-path> [--json]
-  ax run <id-or-path> [--key value] [--json] [--any-lifecycle]
-  ax init toolspace <name>
-  ax init capability <fully-qualified-id>      (global.* | workspace.* | toolspace.*)
-  ax init adapter <type>
-  ax init adapter --kind provider <name> [--composes <type>]
-  ax init adapter --toolspace <ts> <type>
-  ax init adapter --toolspace <ts> --kind provider <name> [--composes <type>]
-  ax promote <id> --to <draft|reviewed|active> [--json]
-  ax demote <id> --to <draft|reviewed> [--json]
-  ax doctor [--json]
+    axf list [--all|--any-lifecycle] [--json]
+    axf inspect <id-or-path> [--json]
+    axf run <id-or-path> [--key value] [--json] [--any-lifecycle]
+    axf init toolspace <name>
+    axf init capability <fully-qualified-id>      (global.* | workspace.* | toolspace.*)
+    axf init adapter <type>
+    axf init adapter --kind provider <name> [--composes <type>]
+    axf init adapter --toolspace <ts> <type>
+    axf init adapter --toolspace <ts> --kind provider <name> [--composes <type>]
+    axf promote <id> --to <draft|reviewed|active> [--json]
+    axf demote <id> --to <draft|reviewed> [--json]
+    axf doctor [--json]
 
 Lifecycle flag:
   --any-lifecycle        Allow non-active capabilities to run/list (canonical).
   --allow-draft          Deprecated alias for --any-lifecycle (warns to stderr).
 
 Examples:
-  ax list
-  ax inspect echo say
-  ax inspect lex recall
-  ax run echo say --message hello
-  ax run toy echo say --message hello
-  ax run lex recall --query "recent work"
-  ax run majel status
-  ax run workspace.repo.status
-  ax init adapter --kind provider acme --composes cli
-  ax promote global.acme.status --to active
+    axf list
+    axf inspect echo say
+    axf inspect lex recall
+    axf run echo say --message hello
+    axf run toy echo say --message hello
+    axf run lex recall --query "recent work"
+    axf run majel status
+    axf run workspace.repo.status
+    axf init adapter --kind provider acme --composes cli
+    axf promote global.acme.status --to active
 `);
 }
 
@@ -448,7 +448,7 @@ function assertCapabilityId(id) {
     }
 }
 
-// `ax promote <id> --to <state>` rewrites the capability manifest's
+// `axf promote <id> --to <state>` rewrites the capability manifest's
 // lifecycleState in place. The whole manifest is re-validated after the
 // edit; any validation error blocks the write.
 async function promoteCommand(registry, tokens) {
@@ -500,7 +500,7 @@ async function promoteCommand(registry, tokens) {
     }
 }
 
-// `ax demote <id> --to <state>` is the symmetric inverse of promote.
+// `axf demote <id> --to <state>` is the symmetric inverse of promote.
 // It enforces that the target state is *earlier* in the lifecycle than
 // the current state, so an agent that means to walk a capability back
 // can do so without holding a regression-shaped promote in its head.
@@ -522,7 +522,7 @@ async function demoteCommand(registry, tokens) {
     }
     if (LIFECYCLE_ORDER[target] >= LIFECYCLE_ORDER[capability.lifecycleState]) {
         throw new AxError(
-            `demote refused: '${id}' is '${capability.lifecycleState}' and target '${target}' is not earlier in the lifecycle (use 'ax promote' to advance)`,
+            `demote refused: '${id}' is '${capability.lifecycleState}' and target '${target}' is not earlier in the lifecycle (use 'axf promote' to advance)`,
             2
         );
     }
@@ -565,7 +565,7 @@ function warnIfDeprecatedAllowDraft(options) {
     if (_warnedAllowDraft) return;
     if (options && Object.prototype.hasOwnProperty.call(options, "allow-draft")) {
         process.stderr.write(
-            "ax: warning: --allow-draft is deprecated; use --any-lifecycle (will be removed in v0.1)\n"
+            "axf: warning: --allow-draft is deprecated; use --any-lifecycle (will be removed in v0.1)\n"
         );
         _warnedAllowDraft = true;
     }

@@ -1,5 +1,5 @@
 {
-  "manifestVersion": "ax/v0",
+  "manifestVersion": "axf/v0",
   "id": "global.lex.frame.recall",
   "summary": "Recall frames from the global Lex store",
   "provider": "lex",
@@ -23,6 +23,6 @@
   "policies": [],
   "owner": "module:lex",
   "examples": [
-    "ax run lex frame recall --query recent --limit 5"
+    "axf run lex frame recall --query recent --limit 5"
   ]
 }

@@ -1,5 +1,5 @@
 {
-  "manifestVersion": "ax/v0",
+  "manifestVersion": "axf/v0",
   "id": "global.lex.recall",
   "summary": "Recall frames from Lex (read-only).",
   "provider": "lex",
@@ -27,7 +27,7 @@
   "policies": [],
   "owner": "module:lex",
   "examples": [
-    "ax run lex recall --list 5",
-    "ax run lex recall --query 'recent work'"
+    "axf run lex recall --list 5",
+    "axf run lex recall --query 'recent work'"
   ]
 }

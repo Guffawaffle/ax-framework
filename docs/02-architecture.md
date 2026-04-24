@@ -1,8 +1,8 @@
-# AX Architecture Overview
+# axf Architecture Overview
 
 ## Architecture statement
 
-AX should be built as a small platform with clear layers.
+axf should be built as a small platform with clear layers.
 
 The layers are:
 
@@ -16,7 +16,7 @@ The layers are:
 ## High-level shape
 
 ```text
-AX CLI
+axf CLI
   -> parser
   -> resolver
   -> registry
@@ -29,27 +29,27 @@ AX CLI
 
 Conceptual grammar:
 
-`ax <toolspace?> <module> <capability> [args...]`
+`axf <toolspace?> <module> <capability> [args...]`
 
 Examples:
 
-- `ax lex frame recall`
-- `ax awa lex frame recall`
-- `ax stfc mod extract assets`
+- `axf lex frame recall`
+- `axf awa lex frame recall`
+- `axf stfc mod extract assets`
 
 Important: the CLI path is not the execution target.
 It is a lookup path.
 
 ## Global vs mounted distinction
 
-### `ax lex ...`
+### `axf lex ...`
 
 This means:
-- use the global Lex module exposed through AX
+- use the global Lex module exposed through axf
 - no toolspace-local mount is assumed
 - global defaults and policies apply
 
-### `ax awa lex ...`
+### `axf awa lex ...`
 
 This means:
 - enter the `awa` toolspace
@@ -58,7 +58,7 @@ This means:
 
 These are not equivalent by definition.
 
-Even if the first implementation proxies one through the other, AX should preserve the distinction internally.
+Even if the first implementation proxies one through the other, axf should preserve the distinction internally.
 
 ## Resolution order
 
@@ -70,17 +70,17 @@ Preferred conceptual order:
 
 This allows toolspaces and workspaces to narrow or override broader behavior in predictable ways.
 
-## Why AX owns the mount model
+## Why axf owns the mount model
 
-Mounted modules should be resolved by AX through declared manifests and adapter bindings.
+Mounted modules should be resolved by axf through declared manifests and adapter bindings.
 
-Providers do not need to implement AX-specific hooks unless they want richer native integration.
+Providers do not need to implement axf-specific hooks unless they want richer native integration.
 
-This keeps AX open without making every provider responsible for AX internals.
+This keeps axf open without making every provider responsible for axf internals.
 
 ## Provider integration stance
 
-AX should support multiple adapter styles:
+axf should support multiple adapter styles:
 
 - `internal`
 - `cli`
@@ -92,7 +92,7 @@ For v0, `internal` and `cli` are enough.
 ## Recommended top-level repo shape
 
 ```text
-ax/
+axf/
   README.md
   docs/
   prompts/
@@ -116,11 +116,11 @@ Keep the framework small.
 
 Minimum useful commands:
 
-- `ax list`
-- `ax inspect <id>`
-- `ax run <id>`
-- `ax init toolspace`
-- `ax init capability`
-- `ax doctor`
+- `axf list`
+- `axf inspect <id>`
+- `axf run <id>`
+- `axf init toolspace`
+- `axf init capability`
+- `axf doctor`
 
-Do not start by backfilling every historical AX command.
+Do not start by backfilling every historical command spelling.

@@ -1,4 +1,4 @@
-# AX Adapter Contract
+# axf Adapter Contract
 
 > Status: alpha — the two adapter kinds below are both implemented and
 > exercised by real providers (Lex, Majel). v0.1 may tighten field
@@ -6,22 +6,22 @@
 
 ## Goal
 
-An AX adapter bridges a provider into AX's capability model.
+An axf adapter bridges a provider into axf's capability model.
 
 The provider may be:
 
-- an internal AX implementation (a function in this repo)
+- an internal axf implementation (a function in this repo)
 - a CLI tool (Lex, Majel's `ax`)
 - a library
 - later: an RPC or MCP surface
 
-The adapter is owned by AX's integration model. **A provider does not
-need to implement AX-specific hooks.** AX adapts to the provider, never
+The adapter is owned by axf's integration model. **A provider does not
+need to implement axf-specific hooks.** axf adapts to the provider, never
 the reverse.
 
 ## Two adapter kinds
 
-AX recognizes two complementary kinds of adapter folder. They live
+axf recognizes two complementary kinds of adapter folder. They live
 side-by-side under `adapters/`. The loader keys them differently and
 the executor composes them when both are involved.
 
@@ -103,8 +103,8 @@ Every adapter must answer:
    `adapterType`; provider: any with matching `providerAdapter`.)
 2. How is execution performed?
 3. How are args translated to the provider's calling convention?
-4. How are outputs normalized into the AX result shape above?
-5. What defaults or policies can AX inject safely?
+4. How are outputs normalized into the axf result shape above?
+5. What defaults or policies can axf inject safely?
 
 ## Worked examples in this repo
 
@@ -112,7 +112,7 @@ Every adapter must answer:
 |---|---|---|---|
 | `echo` (built-in) | `internal` | none | trivial; no envelope |
 | `lex` | `cli` | none | Lex emits raw JSON; generic CLI suffices |
-| `majel` | `cli` | `majel` | Majel emits an `{command, success, errors[], hints[]}` envelope; provider unwraps it into AX's `{ok, error}` shape |
+| `majel` | `cli` | `majel` | Majel emits an `{command, success, errors[], hints[]}` envelope; provider unwraps it into axf's `{ok, error}` shape |
 
 The Majel adapter is the canonical "provider adapter as envelope
 translator." Read [`adapters/majel/index.js`](../adapters/majel/index.js)
@@ -147,14 +147,14 @@ Resolution order, per `(adapterType, providerAdapter)` lookup:
 resolve global adapters. Cross-toolspace reuse is not a goal: each
 toolspace's private adapters are isolated.
 
-`ax doctor` warns when:
+`axf doctor` warns when:
 
 - a `toolspaces/<ts>/adapters/` tree exists but no toolspace mount
   declares `<ts>` (orphaned dir);
 - a private adapter shadows a same-named global one (so the override
   is intentional, not silent).
 
-Use `ax init adapter --toolspace <ts> <name>` to scaffold a private
+Use `axf init adapter --toolspace <ts> <name>` to scaffold a private
 adapter directly into the right path.
 
 ## When to reach for a provider adapter
@@ -175,12 +175,12 @@ adapter" until pain proves otherwise.
 ## Lifecycle
 
 Adapters ship with `lifecycleState: "draft" | "reviewed" | "active"`.
-`ax doctor` reports adapter load issues; promotion is deliberate. There
+`axf doctor` reports adapter load issues; promotion is deliberate. There
 is no implicit promotion when an adapter "works once."
 
 ## Agent-assisted adapter work
 
-`ax init adapter <type>` and `ax init adapter --kind provider <name>`
+`axf init adapter <type>` and `axf init adapter --kind provider <name>`
 both scaffold a draft adapter against this contract. Agents are
 encouraged to drive the planning and scaffolding loop using the
 prompts under [`prompts/`](../prompts/). The contract is open on

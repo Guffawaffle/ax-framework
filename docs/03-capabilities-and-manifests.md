@@ -2,17 +2,17 @@
 
 ## Goal
 
-Every runnable unit in AX should be declared before it is trusted.
+Every runnable unit in axf should be declared before it is trusted.
 
 The manifest layer is the contract that lets:
 - humans inspect a capability
 - agents scaffold safely
-- AX resolve consistently
+- axf resolve consistently
 - policies enforce lifecycle state and side effects
 
 ## Capability identity
 
-Human syntax may be short, but AX should resolve to a fully qualified capability ID.
+Human syntax may be short, but axf should resolve to a fully qualified capability ID.
 
 Examples:
 

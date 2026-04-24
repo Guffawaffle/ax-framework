@@ -1,12 +1,12 @@
-# AX
+# axf
 
-A manifest-driven capability router and scaffolding framework. AX hosts
+A manifest-driven capability router and scaffolding framework. axf hosts
 provider-built tools (CLIs, libraries, RPCs) behind a single command
 shape with strict lifecycle gates, schema-validated args, and a small
 open adapter contract any agent can extend.
 
 > Status: **alpha**. End-to-end with two real providers (Lex, Majel).
-> Manifest version `ax/v0` is stable for the alpha; field renames
+> Manifest version `axf/v0` is stable for the alpha; field renames
 > coming in `v0.1` will go through a deprecation window.
 
 ## Install (alpha)
@@ -21,7 +21,7 @@ sudo ln -sfn /srv/axf/bin/axf.js /usr/local/bin/axf
 ```
 
 `axf` finds its workspace by walking up from the current directory for
-an `ax.workspace.json` marker, then by walking up from the binary's own
+an `axf.workspace.json` marker, then by walking up from the binary's own
 location. From any directory:
 
 ```sh
@@ -33,7 +33,7 @@ axf run majel diff
 axf inspect ops majel status
 ```
 
-`AX_WORKSPACE=<path>` or `--workspace <path>` overrides discovery.
+`AXF_WORKSPACE=<path>` or `--workspace <path>` overrides discovery.
 
 ## What's wired up
 
@@ -43,7 +43,7 @@ axf inspect ops majel status
 - **`cli`** — generic subprocess dispatcher with stdout JSON parsing
   (`adapters/cli/`)
 - **`majel`** (provider) — composes `cli`, unwraps Majel's
-  `{command, success, errors[], hints[]}` envelope into AX's normalized
+  `{command, success, errors[], hints[]}` envelope into axf's normalized
   result (`adapters/majel/`)
 
 ### Built-in capabilities
@@ -87,7 +87,7 @@ is a small, complete, copy-and-modify example.
 ## Layout
 
 ```
-ax.workspace.json               # workspace marker
+axf.workspace.json               # workspace marker
 bin/axf.js                      # CLI entry (symlinked as /usr/local/bin/axf)
 src/cli/                        # CLI parsing + main dispatch
 src/core/                       # registry, resolver, executor, adapters, doctor, policy
@@ -102,7 +102,7 @@ test/                           # node:test, zero-dep
 
 ## Reading order
 
-1. [`docs/00-foundation.md`](docs/00-foundation.md) — why AX exists
+1. [`docs/00-foundation.md`](docs/00-foundation.md) — why axf exists
 2. [`docs/01-vocabulary.md`](docs/01-vocabulary.md)
 3. [`docs/02-architecture.md`](docs/02-architecture.md)
 4. [`docs/03-capabilities-and-manifests.md`](docs/03-capabilities-and-manifests.md)

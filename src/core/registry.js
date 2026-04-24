@@ -8,7 +8,7 @@ import {
     validateToolspaceManifest
 } from "./manifest-validator.js";
 
-export const SUPPORTED_MANIFEST_VERSIONS = new Set(["ax/v0"]);
+export const SUPPORTED_MANIFEST_VERSIONS = new Set(["axf/v0", "ax/v0"]);
 
 export async function createRegistry({ rootDir, strict = true } = {}) {
     const manifestRoot = path.join(rootDir, "manifests");
@@ -80,7 +80,7 @@ export class ManifestRegistry {
 
         this.loadIssues.push({
             severity: "error",
-            message: `${relativePath} is not a recognized AX manifest (no 'id' or 'toolspace' field)`
+            message: `${relativePath} is not a recognized axf manifest (no 'id' or 'toolspace' field)`
         });
         this.rejected.push(relativePath);
     }

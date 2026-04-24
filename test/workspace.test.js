@@ -9,7 +9,7 @@ async function tmpWorkspace() {
     const root = await mkdtemp(path.join(os.tmpdir(), "ax-ws-"));
     await writeFile(
         path.join(root, WORKSPACE_MARKER),
-        JSON.stringify({ manifestVersion: "ax/v0", name: "fixture", summary: "test" })
+        JSON.stringify({ manifestVersion: "axf/v0", name: "fixture", summary: "test" })
     );
     return root;
 }
@@ -18,7 +18,7 @@ test("explicit --workspace wins over everything", async () => {
     const root = await tmpWorkspace();
     const ws = findWorkspaceRoot({
         cwd: "/some/other/place",
-        env: { AX_WORKSPACE: "/elsewhere" },
+        env: { AXF_WORKSPACE: "/elsewhere" },
         explicit: root
     });
     assert.equal(ws.root, root);
@@ -26,7 +26,18 @@ test("explicit --workspace wins over everything", async () => {
     assert.equal(ws.viaMarker, true);
 });
 
-test("AX_WORKSPACE wins over marker walks", async () => {
+test("AXF_WORKSPACE wins over marker walks", async () => {
+    const root = await tmpWorkspace();
+    const ws = findWorkspaceRoot({
+        cwd: "/no/marker/here",
+        env: { AXF_WORKSPACE: root }
+    });
+    assert.equal(ws.root, root);
+    assert.equal(ws.source, "env");
+    assert.equal(ws.viaMarker, true);
+});
+
+test("legacy AX_WORKSPACE still resolves during migration", async () => {
     const root = await tmpWorkspace();
     const ws = findWorkspaceRoot({
         cwd: "/no/marker/here",

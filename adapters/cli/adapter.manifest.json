@@ -1,10 +1,10 @@
 {
-  "manifestVersion": "ax/v0",
+  "manifestVersion": "axf/v0",
   "kind": "type-adapter",
   "type": "cli",
-  "summary": "Generic CLI adapter. Spawns the executionTarget.command with translated args and normalizes stdout/stderr into AX results.",
+  "summary": "Generic CLI adapter. Spawns the executionTarget.command with translated args and normalizes stdout/stderr into axf results.",
   "entry": "index.js",
   "supportedExecutionTargets": ["command"],
   "lifecycleState": "active",
-  "owner": "ax/core"
+  "owner": "axf/core"
 }

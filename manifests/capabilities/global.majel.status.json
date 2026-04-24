@@ -1,5 +1,5 @@
 {
-  "manifestVersion": "ax/v0",
+  "manifestVersion": "axf/v0",
   "id": "global.majel.status",
   "summary": "Majel project health snapshot (git, postgres, server, test count).",
   "provider": "majel",
@@ -22,7 +22,7 @@
   "policies": [],
   "owner": "module:majel",
   "examples": [
-    "ax run majel status",
-    "ax run majel status --json"
+    "axf run majel status",
+    "axf run majel status --json"
   ]
 }

@@ -4,7 +4,7 @@
 //   - delegate process spawning + stdout capture
 //   - unwrap Majel's AxResult envelope, which always looks like:
 //       { command, success, timestamp, durationMs, data, errors?, hints? }
-//   - map success=false -> AX result.ok=false with stitched-up error
+//   - map success=false -> axf result.ok=false with stitched-up error
 //     message, while preserving Majel's hints[] on result.meta for the
 //     caller to surface
 //

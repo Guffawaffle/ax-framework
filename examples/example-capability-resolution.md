@@ -48,7 +48,7 @@ Provider adapter unwraps Majel's envelope:
 // Majel emits:
 { command: "ax:status", success: true, durationMs: 78, data: { ... } }
 
-// AX returns:
+// axf returns:
 {
   ok: true,
   data: { ... },                                   // Majel's `data`, unwrapped

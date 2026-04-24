@@ -9,8 +9,8 @@ import { createRegistry } from "../src/core/registry.js";
 async function bootstrapWorkspace() {
     const root = await mkdtemp(path.join(os.tmpdir(), "ax-promote-"));
     await writeFile(
-        path.join(root, "ax.workspace.json"),
-        JSON.stringify({ manifestVersion: "ax/v0", name: "fixture" })
+        path.join(root, "axf.workspace.json"),
+        JSON.stringify({ manifestVersion: "axf/v0", name: "fixture" })
     );
     await mkdir(path.join(root, "manifests", "capabilities"), { recursive: true });
     await mkdir(path.join(root, "adapters"), { recursive: true });
@@ -25,7 +25,7 @@ async function writeCapability(root, manifest) {
 
 function baseCap(overrides = {}) {
     return {
-        manifestVersion: "ax/v0",
+        manifestVersion: "axf/v0",
         id: "global.demo.thing",
         summary: "demo",
         provider: "demo",

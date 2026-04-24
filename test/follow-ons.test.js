@@ -1,5 +1,5 @@
 // Tests for the post-alpha follow-ons:
-//   - `ax demote <id> --to <state>`
+//   - `axf demote <id> --to <state>`
 //   - `--allow-draft` deprecation warning to stderr
 //   - `kind: "adapter"` legacy spelling accepted with warning
 //   - new policies: require_active_lifecycle, forbid_network
@@ -16,8 +16,8 @@ import { main } from "../src/cli/main.js";
 async function tmpRoot() {
     const root = await mkdtemp(path.join(os.tmpdir(), "ax-followons-"));
     await writeFile(
-        path.join(root, "ax.workspace.json"),
-        JSON.stringify({ manifestVersion: "ax/v0", name: "fixture" })
+        path.join(root, "axf.workspace.json"),
+        JSON.stringify({ manifestVersion: "axf/v0", name: "fixture" })
     );
     await mkdir(path.join(root, "manifests", "capabilities"), { recursive: true });
     await mkdir(path.join(root, "manifests", "toolspaces"), { recursive: true });
@@ -27,7 +27,7 @@ async function tmpRoot() {
 async function writeCapability(root, id, overrides = {}) {
     const file = path.join(root, "manifests", "capabilities", `${id}.json`);
     const manifest = {
-        manifestVersion: "ax/v0",
+        manifestVersion: "axf/v0",
         id,
         summary: "test",
         provider: "x",
@@ -151,7 +151,7 @@ test("`kind: \"adapter\"` is accepted as legacy with a deprecation warning", asy
     await writeFile(
         path.join(dir, "adapter.manifest.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             kind: "adapter", // legacy spelling
             type: "legacy",
             entry: "index.js",
@@ -192,7 +192,7 @@ test("`--any-lifecycle` does NOT emit the deprecation warning", async () => {
     assert.doesNotMatch(stderr, /deprecated/);
 });
 
-test("`ax demote <id> --to draft` rewrites an active capability", async () => {
+test("`axf demote <id> --to draft` rewrites an active capability", async () => {
     const root = await tmpRoot();
     const file = await writeCapability(root, "global.x.y", { lifecycleState: "active" });
     await captureStdout(() =>
@@ -202,7 +202,7 @@ test("`ax demote <id> --to draft` rewrites an active capability", async () => {
     assert.equal(after.lifecycleState, "draft");
 });
 
-test("`ax demote` refuses to walk forward in the lifecycle", async () => {
+test("`axf demote` refuses to walk forward in the lifecycle", async () => {
     const root = await tmpRoot();
     await writeCapability(root, "global.x.y", { lifecycleState: "draft" });
     await assert.rejects(
@@ -211,7 +211,7 @@ test("`ax demote` refuses to walk forward in the lifecycle", async () => {
     );
 });
 
-test("`ax demote` refuses unknown capability", async () => {
+test("`axf demote` refuses unknown capability", async () => {
     const root = await tmpRoot();
     await assert.rejects(
         () => main(["--workspace", root, "demote", "global.nope.nope", "--to", "draft"]),
@@ -219,7 +219,7 @@ test("`ax demote` refuses unknown capability", async () => {
     );
 });
 
-test("`ax demote --json` emits structured output", async () => {
+test("`axf demote --json` emits structured output", async () => {
     const root = await tmpRoot();
     await writeCapability(root, "global.x.y", { lifecycleState: "reviewed" });
     const out = await captureStdout(() =>

@@ -1,14 +1,14 @@
-# AX v0 → alpha bootstrap plan
+# axf v0 → alpha bootstrap plan
 
 ## Objective
 
-Build the smallest version of AX that proves the framework shape, then
+Build the smallest version of axf that proves the framework shape, then
 prove it against two real providers. Optimize for clarity,
 inspectability, and safety — not completeness.
 
 ## Goals
 
-AX should prove:
+axf should prove:
 
 - workspace binding (CWD-independent execution)
 - manifest-based capability resolution
@@ -23,7 +23,7 @@ AX should prove:
 - legacy command backfill as the main success metric
 - plugin ecosystems beyond the adapter contract
 - mandatory MCP
-- mandatory provider-native AX hooks
+- mandatory provider-native axf hooks
 - automatic promotion of agent-generated capabilities
 
 ## Slice history
@@ -36,14 +36,14 @@ AX should prove:
 - Slice 4 — executor (initial; later split out)
 - Slice 5 — lifecycle gates (`active` default; `--any-lifecycle` opt-in,
   `--allow-draft` retained as deprecated alias)
-- Slice 6 — `ax init {toolspace,capability}` scaffolding
+- Slice 6 — `axf init {toolspace,capability}` scaffolding
 
 ### Slice 7: adapter spine + strict gates
 
 - Execution dispatched through `adapters/<type>/` folders.
 - `internal` and `cli` ship as built-in type adapters.
-- `ax init adapter <type>` scaffolds a draft type-adapter.
-- `manifestVersion: "ax/v0"` required; strict registry refuses bad
+- `axf init adapter <type>` scaffolds a draft type-adapter.
+- `manifestVersion: "axf/v0"` required; strict registry refuses bad
   manifests at load time.
 - `argsSchema` validation + coercion at resolve time; CLI parsing no
   longer auto-coerces numerics.
@@ -64,14 +64,14 @@ AX should prove:
 - Capability manifests gain optional `providerAdapter: "<name>"`. Without
   it, the generic type adapter handles execution. With it, the provider
   composes over the type adapter through the executor.
-- `ax init adapter --kind provider <name> [--composes <type>]` scaffolds
+- `axf init adapter --kind provider <name> [--composes <type>]` scaffolds
   a draft provider adapter.
 - Workspace-root resolution (`src/core/workspace.js`): explicit
-  `--workspace`, `AX_WORKSPACE`, marker-file walk from cwd, marker walk
+  `--workspace`, `AXF_WORKSPACE`, marker-file walk from cwd, marker walk
   from script location, then cwd. Lets `axf` work from any directory.
 - `axf` symlinked at `/usr/local/bin/axf` as the alpha PATH binary;
   collision with the unrelated Majel `ax` tool deliberately avoided
-  until AX can host it as a first-class toolspace.
+  until axf can host it as a first-class toolspace.
 - Majel provider adapter at `adapters/majel/` unwraps the Majel
   `{command, success, durationMs, data, errors[], hints[]}` envelope.
 - Capabilities `global.majel.status` and `global.majel.diff` shipped
@@ -86,7 +86,7 @@ AX should prove:
 3. A draft adapter and capability scaffold are created from declared templates.
 4. Two real providers (Lex, Majel) wired in through the public contract,
    one through the generic CLI path and one through a provider adapter.
-5. An agent can extend AX by following the canonical prompts without
+5. An agent can extend axf by following the canonical prompts without
    reading framework source.
 
 ## Known follow-ons (post-alpha)
@@ -95,7 +95,7 @@ All four below shipped with the post-alpha follow-on pass; the Ajv item
 remains deferred on purpose.
 
 - **Deferred.** Replace the in-house schema subset with Ajv. Adding a
-  runtime dep changes AX's zero-dep stance (a foundational property),
+  runtime dep changes axf's zero-dep stance (a foundational property),
   so the swap waits until validation strain is real, not theoretical.
   Single-file swap behind `assertValid` remains the plan when the time
   comes.

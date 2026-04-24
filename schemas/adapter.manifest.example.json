@@ -1,5 +1,5 @@
 {
-  "manifestVersion": "ax/v0",
+  "manifestVersion": "axf/v0",
   "kind": "type-adapter",
   "type": "<adapter-type>",
   "summary": "What this adapter does, in one line.",

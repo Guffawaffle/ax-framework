@@ -1,8 +1,8 @@
-# AX Lifecycle and Promotion Model
+# axf Lifecycle and Promotion Model
 
 ## Problem
 
-If agents can scaffold new capabilities, adapters, or mounts, AX needs a trust model.
+If agents can scaffold new capabilities, adapters, or mounts, axf needs a trust model.
 
 Without one, generated workflow units become trusted too early and the framework becomes noisy and unsafe.
 
@@ -30,7 +30,7 @@ Characteristics:
 
 ### `active`
 
-A trusted unit available in the normal AX surface.
+A trusted unit available in the normal axf surface.
 
 Characteristics:
 - discoverable by default
@@ -63,7 +63,7 @@ This is the difference between:
 - "agents can build whatever"
 - "agents can safely contribute within a declared trust model"
 
-AX needs the second one.
+axf needs the second one.
 
 ## Developer experience rule
 
@@ -84,9 +84,9 @@ not:
 
 Examples of possible future commands:
 
-- `ax inspect draft`
-- `ax promote <id> --to reviewed`
-- `ax promote <id> --to active`
-- `ax review <id>`
+- `axf inspect draft`
+- `axf promote <id> --to reviewed`
+- `axf promote <id> --to active`
+- `axf review <id>`
 
 These are not required for v0, but the model should assume something like them.

@@ -70,7 +70,7 @@ test("blocks non-active capabilities unless --allow-draft", async () => {
     await writeFile(
         path.join(tmp, "manifests", "capabilities", "global.echo.draft.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             id: "global.echo.draft",
             summary: "Draft fixture for the lifecycle gate.",
             provider: "draft",

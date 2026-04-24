@@ -1,6 +1,6 @@
-# AX Adapter Folder Shape (alpha)
+# axf Adapter Folder Shape (alpha)
 
-This is the concrete file contract used by AX. It is intentionally
+This is the concrete file contract used by axf. It is intentionally
 small. Add complexity only when a real adapter justifies it. See
 [`04-adapter-contract.md`](04-adapter-contract.md) for the full model.
 
@@ -18,7 +18,7 @@ adapters/<type>/
 
 ```json
 {
-  "manifestVersion": "ax/v0",
+  "manifestVersion": "axf/v0",
   "kind": "type-adapter",
   "type": "<adapter-type>",
   "summary": "What this adapter does, in one line.",
@@ -62,7 +62,7 @@ adapters/<name>/
 
 ```json
 {
-  "manifestVersion": "ax/v0",
+  "manifestVersion": "axf/v0",
   "kind": "provider",
   "name": "<provider-name>",
   "composes": "<type-adapter-name>",
@@ -124,13 +124,13 @@ the global forms above. Differences are purely about visibility:
 - visible only to capabilities mounted under `<toolspace>`
 - shadows any same-named global adapter when that toolspace is in play
 - `workspace-local` capabilities cannot use them (no mount)
-- orphaned dirs (no matching toolspace mount) are flagged by `ax doctor`
+- orphaned dirs (no matching toolspace mount) are flagged by `axf doctor`
 
 Scaffold with:
 
 ```
-ax init adapter --toolspace <ts> <type>
-ax init adapter --toolspace <ts> --kind provider <name> [--composes <type>]
+axf init adapter --toolspace <ts> <type>
+axf init adapter --toolspace <ts> --kind provider <name> [--composes <type>]
 ```
 
 ## Result shape
@@ -148,8 +148,8 @@ return {
 
 ## Lifecycle
 
-Both kinds carry `lifecycleState`. `ax init adapter <type>` and
-`ax init adapter --kind provider <name>` create drafts. Doctor reports
+Both kinds carry `lifecycleState`. `axf init adapter <type>` and
+`axf init adapter --kind provider <name>` create drafts. Doctor reports
 load issues; promote deliberately. There is no automatic promotion.
 
 ## Why this is light
@@ -160,6 +160,6 @@ exported function (`execute`). That is enough to:
 - declare the adapter and its lifecycle state
 - let the loader discover and import it
 - run any capability that targets the adapter type or provider
-- normalize results into AX's `{ ok, data | error, meta }` shape
+- normalize results into axf's `{ ok, data | error, meta }` shape
 
 Anything beyond that should earn its place in a later slice.

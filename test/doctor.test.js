@@ -68,7 +68,7 @@ test("strict mode refuses to load a capability with adapter/executionTarget mism
         await writeFile(
             path.join(tmp, "manifests", "capabilities", "global.bad.cli.json"),
             JSON.stringify({
-                manifestVersion: "ax/v0",
+                manifestVersion: "axf/v0",
                 id: "global.bad.cli",
                 summary: "missing command",
                 provider: "x",
@@ -104,7 +104,7 @@ test("strict mode refuses scope/id mismatch", async () => {
         await writeFile(
             path.join(tmp, "manifests", "capabilities", "bad.json"),
             JSON.stringify({
-                manifestVersion: "ax/v0",
+                manifestVersion: "axf/v0",
                 id: "toolspace.x.echo.say",
                 summary: "wrong scope",
                 provider: "x",

@@ -1,5 +1,5 @@
 {
-  "manifestVersion": "ax/v0",
+  "manifestVersion": "axf/v0",
   "id": "global.echo.say",
   "summary": "Return a message through the built-in echo provider",
   "provider": "echo",
@@ -29,6 +29,6 @@
   "policies": [],
   "owner": "module:echo",
   "examples": [
-    "ax run echo say --message hello"
+    "axf run echo say --message hello"
   ]
 }

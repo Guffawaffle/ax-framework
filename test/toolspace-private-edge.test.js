@@ -17,8 +17,8 @@ import { main } from "../src/cli/main.js";
 async function tmpRoot() {
     const root = await mkdtemp(path.join(os.tmpdir(), "ax-tspriv-edge-"));
     await writeFile(
-        path.join(root, "ax.workspace.json"),
-        JSON.stringify({ manifestVersion: "ax/v0", name: "fixture" })
+        path.join(root, "axf.workspace.json"),
+        JSON.stringify({ manifestVersion: "axf/v0", name: "fixture" })
     );
     await mkdir(path.join(root, "manifests", "capabilities"), { recursive: true });
     await mkdir(path.join(root, "manifests", "toolspaces"), { recursive: true });
@@ -31,7 +31,7 @@ async function writeGlobalInternal(root) {
     await writeFile(
         path.join(dir, "adapter.manifest.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             kind: "type-adapter",
             type: "internal",
             entry: "index.js",
@@ -53,7 +53,7 @@ test("doctor warns when a toolspace adapter dir has no matching mount", async ()
     await writeFile(
         path.join(orphan, "adapter.manifest.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             kind: "type-adapter",
             type: "cli",
             entry: "index.js",
@@ -80,7 +80,7 @@ test("doctor warns when a private adapter shadows a global one of the same name"
     await writeFile(
         path.join(root, "manifests", "toolspaces", "tly.mount.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             toolspace: "tly",
             lifecycleState: "active",
             moduleMounts: {}
@@ -92,7 +92,7 @@ test("doctor warns when a private adapter shadows a global one of the same name"
     await writeFile(
         path.join(dir, "adapter.manifest.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             kind: "type-adapter",
             type: "internal",
             entry: "index.js",
@@ -120,7 +120,7 @@ test("private adapter with malformed manifest surfaces as a load issue", async (
     await writeFile(
         path.join(dir, "adapter.manifest.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             kind: "type-adapter"
             // missing entry, type, lifecycleState
         })
@@ -188,7 +188,7 @@ test("private provider whose `composes` mismatches capability adapterType is rej
     await writeFile(
         path.join(root, "manifests", "toolspaces", "tly.mount.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             toolspace: "tly",
             lifecycleState: "active",
             moduleMounts: { e: { source: "global.e", capabilities: ["go"] } }
@@ -197,7 +197,7 @@ test("private provider whose `composes` mismatches capability adapterType is rej
     await writeFile(
         path.join(root, "manifests", "capabilities", "global.e.go.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             id: "global.e.go",
             summary: "go",
             provider: "x",
@@ -219,7 +219,7 @@ test("private provider whose `composes` mismatches capability adapterType is rej
     await writeFile(
         path.join(dir, "adapter.manifest.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             kind: "provider",
             name: "wrong",
             composes: "cli", // capability uses "internal"; this is wrong on purpose

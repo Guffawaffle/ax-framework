@@ -11,8 +11,8 @@ import { executeResolvedCapability } from "../src/core/executor.js";
 async function bootstrap() {
     const root = await mkdtemp(path.join(os.tmpdir(), "ax-wsl-"));
     await writeFile(
-        path.join(root, "ax.workspace.json"),
-        JSON.stringify({ manifestVersion: "ax/v0", name: "fixture" })
+        path.join(root, "axf.workspace.json"),
+        JSON.stringify({ manifestVersion: "axf/v0", name: "fixture" })
     );
     await mkdir(path.join(root, "manifests", "capabilities"), { recursive: true });
 
@@ -23,7 +23,7 @@ async function bootstrap() {
     await writeFile(
         path.join(adapterDir, "adapter.manifest.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             kind: "type-adapter",
             type: "internal",
             entry: "index.js",
@@ -47,7 +47,7 @@ async function writeWsCap(root) {
     await writeFile(
         path.join(root, "manifests", "capabilities", "workspace.repo.echo.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             id: "workspace.repo.echo",
             summary: "echo a message, workspace-local",
             provider: "internal",
@@ -120,7 +120,7 @@ test("manifest validator rejects workspace-local id without workspace.* prefix",
     await writeFile(
         path.join(root, "manifests", "capabilities", "bad.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             id: "global.repo.thing",
             summary: "wrong scope",
             provider: "x",

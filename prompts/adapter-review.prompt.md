@@ -1,6 +1,6 @@
 # Adapter review prompt
 
-You are reviewing a draft AX adapter and deciding whether it should
+You are reviewing a draft axf adapter and deciding whether it should
 move to `reviewed` or `active`. Be conservative; "it ran once" is not
 enough.
 
@@ -14,7 +14,7 @@ enough.
 
 ### Manifest
 
-- [ ] `manifestVersion` is `ax/v0`
+- [ ] `manifestVersion` is `axf/v0`
 - [ ] `kind` is `type-adapter` or `provider` (not anything else)
 - [ ] Type adapters declare `type`; providers declare `name` + `composes`
 - [ ] `lifecycleState` matches the actual maturity (still `draft` if
@@ -41,7 +41,7 @@ enough.
 
 ### Capabilities
 
-- [ ] All declared capabilities load (`ax doctor` clean)
+- [ ] All declared capabilities load (`axf doctor` clean)
 - [ ] Capability `adapterType` matches the type adapter; if a
       `providerAdapter` is set, it matches a loaded provider
 - [ ] First-pass capabilities are `read` or `none` side effects
@@ -57,7 +57,7 @@ enough.
 
 ### Doctor + full suite
 
-- [ ] `ax doctor` reports zero errors (warnings allowed)
+- [ ] `axf doctor` reports zero errors (warnings allowed)
 - [ ] `npm test` is green
 
 ## Decision

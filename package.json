@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Manifest-driven AX launcher and toolspace framework prototype.",
+  "description": "Manifest-driven axf launcher and toolspace framework prototype.",
   "bin": {
     "axf": "./bin/axf.js"
   },

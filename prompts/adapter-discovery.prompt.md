@@ -1,7 +1,7 @@
 # Adapter discovery prompt
 
-You are working inside the AX framework repo. Your job is **discovery
-only**: figure out whether a tool can be wired into AX, and through
+You are working inside the axf framework repo. Your job is **discovery
+only**: figure out whether a tool can be wired into axf, and through
 which adapter shape. Do not scaffold yet.
 
 ## Required reading
@@ -38,7 +38,7 @@ Pick exactly one:
 |---|---|
 | Generic `cli` type-adapter only | CLI exists, JSON-out is direct (no envelope), exit code is honest |
 | Generic `cli` + a new provider adapter | CLI exists but wraps payload in an envelope, or has hints/errors arrays worth surfacing |
-| New `library` type-adapter (future) | Tool is a library, no stable CLI; only after AX adds a `library` type adapter |
+| New `library` type-adapter (future) | Tool is a library, no stable CLI; only after axf adds a `library` type adapter |
 | Not yet connectable | Surface is unstable, undocumented, or has no machine-readable output mode |
 
 ## Deliverables

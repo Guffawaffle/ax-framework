@@ -1,6 +1,6 @@
 # Adapter planning prompt
 
-You are working inside the AX framework repo. The discovery step has
+You are working inside the axf framework repo. The discovery step has
 already produced a recommendation. Your job is to turn that into a
 concrete plan an implementer (you, another agent, or a human) can
 execute mechanically.
@@ -21,7 +21,7 @@ Produce these sections, in order:
 
 ### 1. Capability map
 
-| AX capability id | Provider call | sideEffects | Why this one first |
+| axf capability id | Provider call | sideEffects | Why this one first |
 |---|---|---|---|
 | `global.<provider>.<verb>` | `<command + args>` | `read` / `write` | ... |
 

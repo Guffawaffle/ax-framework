@@ -1,5 +1,5 @@
 {
-  "manifestVersion": "ax/v0",
+  "manifestVersion": "axf/v0",
   "id": "global.majel.diff",
   "summary": "Majel uncommitted changes summary (file count, insertions, deletions, file list).",
   "provider": "majel",
@@ -25,8 +25,8 @@
   "policies": [],
   "owner": "module:majel",
   "examples": [
-    "ax run majel diff",
-    "ax run majel diff --staged",
-    "ax run majel diff --main"
+    "axf run majel diff",
+    "axf run majel diff --staged",
+    "axf run majel diff --main"
   ]
 }

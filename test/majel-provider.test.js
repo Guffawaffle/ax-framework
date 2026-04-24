@@ -13,7 +13,7 @@ const resolved = {
     capability: { id: "global.majel.status" }
 };
 
-test("unwraps a successful Majel envelope into AX result", async () => {
+test("unwraps a successful Majel envelope into axf result", async () => {
     const ctx = {
         typeAdapter: synthTypeAdapter({
             ok: true,
@@ -34,7 +34,7 @@ test("unwraps a successful Majel envelope into AX result", async () => {
     assert.equal(result.meta.majel.durationMs, 17);
 });
 
-test("maps envelope success=false to AX failure with stitched message", async () => {
+test("maps envelope success=false to axf failure with stitched message", async () => {
     const ctx = {
         typeAdapter: synthTypeAdapter({
             ok: true,

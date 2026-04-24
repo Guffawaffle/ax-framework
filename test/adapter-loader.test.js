@@ -67,7 +67,7 @@ test("executor composes provider adapter over type adapter", async () => {
     await writeFile(
         path.join(typeDir, "adapter.manifest.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             kind: "type-adapter",
             type: "fake",
             entry: "index.js",
@@ -91,7 +91,7 @@ test("executor composes provider adapter over type adapter", async () => {
     await writeFile(
         path.join(provDir, "adapter.manifest.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             kind: "provider",
             name: "envelope",
             composes: "fake",
@@ -136,7 +136,7 @@ test("executor refuses provider whose 'composes' disagrees with capability adapt
     await writeFile(
         path.join(typeDir, "adapter.manifest.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             kind: "type-adapter",
             type: "fake",
             entry: "index.js",
@@ -153,7 +153,7 @@ test("executor refuses provider whose 'composes' disagrees with capability adapt
     await writeFile(
         path.join(provDir, "adapter.manifest.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             kind: "provider",
             name: "wrongprov",
             composes: "fake",
@@ -173,7 +173,7 @@ test("executor refuses provider whose 'composes' disagrees with capability adapt
     await writeFile(
         path.join(otherDir, "adapter.manifest.json"),
         JSON.stringify({
-            manifestVersion: "ax/v0",
+            manifestVersion: "axf/v0",
             kind: "type-adapter",
             type: "other",
             entry: "index.js",

@@ -12,8 +12,7 @@ execute mechanically.
 3. [`docs/03-capabilities-and-manifests.md`](../docs/03-capabilities-and-manifests.md)
    — capability manifest fields and lifecycle.
 4. The existing manifests under [`manifests/capabilities/`](../manifests/capabilities/)
-   for shape and naming conventions. The Majel manifests are the most
-   recent worked example.
+  for shape and naming conventions.
 
 ## Plan output
 

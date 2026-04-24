@@ -16,9 +16,9 @@ Human syntax may be short, but axf should resolve to a fully qualified capabilit
 
 Examples:
 
-- `global.lex.frame.recall`
-- `toolspace.awa.lex.frame.recall`
-- `toolspace.stfc.mod.assets.extract`
+- `global.echo.say`
+- `toolspace.toy.echo.say`
+- `workspace.repo.status`
 
 ## Capability manifest fields
 
@@ -43,20 +43,20 @@ Suggested baseline fields:
 
 ```json
 {
-  "id": "global.lex.frame.recall",
-  "summary": "Recall frames from the global Lex store",
-  "provider": "lex",
-  "adapterType": "cli",
+  "id": "global.echo.say",
+  "summary": "Return a message through the built-in echo provider",
+  "provider": "echo",
+  "adapterType": "internal",
   "executionTarget": {
-    "command": "lex",
-    "args": ["frame", "recall", "--json"]
+    "handler": "echo.say"
   },
   "argsSchema": {
     "type": "object",
     "properties": {
-      "query": { "type": "string" },
-      "limit": { "type": "integer", "minimum": 1 }
-    }
+      "message": { "type": "string" }
+    },
+    "required": ["message"],
+    "additionalProperties": false
   },
   "outputModes": ["json", "text"],
   "sideEffects": "none",
@@ -64,7 +64,7 @@ Suggested baseline fields:
   "lifecycleState": "active",
   "defaults": {},
   "policies": [],
-  "owner": "module:lex"
+  "owner": "module:echo"
 }
 ```
 
@@ -77,18 +77,16 @@ Example:
 
 ```json
 {
-  "toolspace": "awa",
+  "toolspace": "toy",
   "moduleMounts": {
-    "lex": {
-      "source": "global.lex",
+    "echo": {
+      "source": "global.echo",
       "mode": "proxy",
       "capabilities": [
-        "frame.recall",
-        "frame.write",
-        "receipt.show"
+        "say"
       ],
       "defaults": {
-        "namespace": "awa"
+        "prefix": "[toy]"
       },
       "policies": [
         "require_workspace_binding"

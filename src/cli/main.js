@@ -422,12 +422,10 @@ Lifecycle flag:
 Examples:
     axf list
     axf inspect echo say
-    axf inspect lex recall
     axf run echo say --message hello
     axf run toy echo say --message hello
-    axf run lex recall --query "recent work"
-    axf run majel status
-    axf run workspace.repo.status
+    axf init toolspace demo
+    axf init capability global.acme.status
     axf init adapter --kind provider acme --composes cli
     axf promote global.acme.status --to active
 `);

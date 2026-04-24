@@ -11,7 +11,7 @@ The layers are:
 3. manifest registry
 4. adapter execution layer
 5. lifecycle and policy gates
-6. optional shared modules such as Lex
+6. optional provider integrations
 
 ## High-level shape
 
@@ -33,28 +33,28 @@ Conceptual grammar:
 
 Examples:
 
-- `axf lex frame recall`
-- `axf awa lex frame recall`
-- `axf stfc mod extract assets`
+- `axf echo say`
+- `axf toy echo say`
+- `axf acme status`
 
 Important: the CLI path is not the execution target.
 It is a lookup path.
 
 ## Global vs mounted distinction
 
-### `axf lex ...`
+### `axf echo ...`
 
 This means:
-- use the global Lex module exposed through axf
+- use the global `echo` module exposed through axf
 - no toolspace-local mount is assumed
 - global defaults and policies apply
 
-### `axf awa lex ...`
+### `axf toy echo ...`
 
 This means:
-- enter the `awa` toolspace
-- use the Lex mount declared there
-- apply `awa` scope, defaults, policies, and restrictions
+- enter the `toy` toolspace
+- use the `echo` mount declared there
+- apply `toy` scope, defaults, policies, and restrictions
 
 These are not equivalent by definition.
 
@@ -123,4 +123,4 @@ Minimum useful commands:
 - `axf init capability`
 - `axf doctor`
 
-Do not start by backfilling every historical command spelling.
+Do not start by broadening the CLI surface before the core loop is solid.

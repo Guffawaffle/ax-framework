@@ -21,10 +21,10 @@ A domain-specific capability pack hosted by axf.
 
 Examples that may exist later:
 
-- `lex`
-- `stfc`
-- `mod`
-- `awa`
+- `toy`
+- `ops`
+- `catalog`
+- `support`
 
 A toolspace owns:
 
@@ -38,7 +38,7 @@ A toolspace owns:
 
 A reusable subsystem that exposes capabilities and can be mounted globally or into a toolspace.
 
-Lex is the clearest early example.
+The built-in `echo` module is the smallest implemented example.
 
 A module is not the same thing as a toolspace:
 - a toolspace is a domain pack
@@ -69,9 +69,9 @@ A specific runnable operation with:
 
 Examples:
 
-- `global.lex.frame.recall`
-- `toolspace.awa.lex.frame.recall`
-- `toolspace.stfc.mod.assets.extract`
+- `global.echo.say`
+- `toolspace.toy.echo.say`
+- `workspace.repo.status`
 
 ## Scope
 

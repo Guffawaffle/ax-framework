@@ -37,17 +37,6 @@ test("AXF_WORKSPACE wins over marker walks", async () => {
     assert.equal(ws.viaMarker, true);
 });
 
-test("legacy AX_WORKSPACE still resolves during migration", async () => {
-    const root = await tmpWorkspace();
-    const ws = findWorkspaceRoot({
-        cwd: "/no/marker/here",
-        env: { AX_WORKSPACE: root }
-    });
-    assert.equal(ws.root, root);
-    assert.equal(ws.source, "env");
-    assert.equal(ws.viaMarker, true);
-});
-
 test("walks ancestors of cwd to find marker file", async () => {
     const root = await tmpWorkspace();
     await mkdir(path.join(root, "deep", "nested", "child"), { recursive: true });

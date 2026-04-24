@@ -7,8 +7,8 @@ is to lay down the draft files and confirm they load.
 
 1. [`docs/08-adapter-folder-shape.md`](../docs/08-adapter-folder-shape.md)
    — file layout and required fields.
-2. [`adapters/majel/`](../adapters/majel/) — the canonical provider
-   adapter; mirror its shape and small size.
+2. An existing provider adapter under [`adapters/`](../adapters/) — use
+   it as a size and shape reference.
 
 ## Scaffold commands
 
@@ -43,7 +43,7 @@ The scaffolder writes drafts under `adapters/<...>/` and
 
 ### Provider adapter `index.js`
 
-Mirror Majel's structure:
+Mirror the existing provider-adapter structure in this repo:
 
 1. Delegate to `ctx.typeAdapter.execute(resolved)`.
 2. Pass through transport-level failures (`!upstream.ok`) unchanged.

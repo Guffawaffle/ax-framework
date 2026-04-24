@@ -1,7 +1,7 @@
 {
   "manifestVersion": "axf/v0",
   "id": "global.lex.recall",
-  "summary": "Recall frames from Lex (read-only).",
+  "summary": "Read-only recall example routed through the generic CLI adapter.",
   "provider": "lex",
   "adapterType": "cli",
   "executionTarget": {

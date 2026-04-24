@@ -5,12 +5,11 @@
 // Resolution order (first match wins):
 //   1. Explicit option:  --workspace <path>          (CLI flag)
 //   2. Environment var:  AXF_WORKSPACE=<path>
-//                        AX_WORKSPACE=<path>         (legacy fallback)
 //   3. Marker file walk: nearest ancestor of cwd that contains
-//                        axf.workspace.json (or legacy ax.workspace.json)
+//                        axf.workspace.json
 //   4. Marker file walk: nearest ancestor of the script's own location
-//                        that contains axf.workspace.json (or legacy
-//                        ax.workspace.json) so /usr/local/bin/axf
+//                        that contains axf.workspace.json so
+//                        /usr/local/bin/axf
 //                        invoked from /tmp still finds /srv/axf)
 //   5. Fallback:         cwd
 //
@@ -22,14 +21,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const WORKSPACE_MARKER = "axf.workspace.json";
-export const LEGACY_WORKSPACE_MARKER = "ax.workspace.json";
-const WORKSPACE_MARKERS = [WORKSPACE_MARKER, LEGACY_WORKSPACE_MARKER];
 
 // Returns { root, source, viaMarker } where:
 //   root       - absolute path to workspace root
 //   source     - one of "explicit" | "env" | "cwd-marker" | "script-marker" | "cwd-fallback"
 //   viaMarker  - true iff the root contains an axf.workspace.json marker
-//                or the legacy ax.workspace.json marker
 //                (i.e. resolution did NOT fall back to cwd). Policies use
 //                this to enforce real workspace binding vs accidental cwd.
 export function findWorkspaceRoot(opts = {}) {
@@ -38,7 +34,7 @@ export function findWorkspaceRoot(opts = {}) {
         const root = path.resolve(cwd, explicit);
         return { root, source: "explicit", viaMarker: hasMarker(root) };
     }
-    const envWorkspace = env.AXF_WORKSPACE ?? env.AX_WORKSPACE;
+    const envWorkspace = env.AXF_WORKSPACE;
     if (envWorkspace) {
         const root = path.resolve(envWorkspace);
         return { root, source: "env", viaMarker: hasMarker(root) };
@@ -58,7 +54,7 @@ export function findWorkspaceRoot(opts = {}) {
 }
 
 function hasMarker(dir) {
-    return WORKSPACE_MARKERS.some((marker) => existsSync(path.join(dir, marker)));
+    return existsSync(path.join(dir, WORKSPACE_MARKER));
 }
 
 function walkForMarker(startDir) {

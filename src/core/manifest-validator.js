@@ -26,7 +26,7 @@ const REQUIRED_TOOLSPACE_FIELDS = [
     "moduleMounts"
 ];
 
-const SUPPORTED_MANIFEST_VERSIONS = new Set(["axf/v0", "ax/v0"]);
+const SUPPORTED_MANIFEST_VERSIONS = new Set(["axf/v0"]);
 const LIFECYCLE_STATES = new Set(["draft", "reviewed", "active"]);
 const ADAPTER_TYPES = new Set(["internal", "cli", "library", "rpc", "mcp"]);
 const SCOPES = new Set(["global", "toolspace-local", "workspace-local"]);

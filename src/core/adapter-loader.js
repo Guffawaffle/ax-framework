@@ -25,7 +25,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { AxError } from "./errors.js";
 
-const SUPPORTED_MANIFEST_VERSIONS = new Set(["axf/v0", "ax/v0"]);
+const SUPPORTED_MANIFEST_VERSIONS = new Set(["axf/v0"]);
 const KNOWN_KINDS = new Set(["type-adapter", "provider"]);
 
 // Two visibility scopes for adapters:

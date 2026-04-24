@@ -1,8 +1,8 @@
 # axf Adapter Contract
 
 > Status: alpha — the two adapter kinds below are both implemented and
-> exercised by real providers (Lex, Majel). v0.1 may tighten field
-> names; it will not change the two-kind shape.
+> exercised by built-in and provider-wrapped examples. v0.1 may tighten
+> field names; it will not change the two-kind shape.
 
 ## Goal
 
@@ -11,7 +11,7 @@ An axf adapter bridges a provider into axf's capability model.
 The provider may be:
 
 - an internal axf implementation (a function in this repo)
-- a CLI tool (Lex, Majel's `ax`)
+- a CLI tool
 - a library
 - later: an RPC or MCP surface
 
@@ -55,8 +55,8 @@ all three.
 
 ```text
 adapters/
-  majel/
-    adapter.manifest.json       # { kind: "provider", name: "majel", composes: "cli" }
+  wrapped-cli/
+    adapter.manifest.json       # { kind: "provider", name: "wrapped-cli", composes: "cli" }
     index.js                    # exports async execute(resolved, ctx)
 ```
 
@@ -110,13 +110,12 @@ Every adapter must answer:
 
 | Provider | Type adapter | Provider adapter | Why |
 |---|---|---|---|
-| `echo` (built-in) | `internal` | none | trivial; no envelope |
-| `lex` | `cli` | none | Lex emits raw JSON; generic CLI suffices |
-| `majel` | `cli` | `majel` | Majel emits an `{command, success, errors[], hints[]}` envelope; provider unwraps it into axf's `{ok, error}` shape |
+| `global.echo.say` | `internal` | none | smallest in-process capability |
+| `global.lex.recall` | `cli` | none | sample CLI-backed read capability |
+| `global.majel.status` | `cli` | `majel` | sample provider-adapter capability with envelope normalization |
 
-The Majel adapter is the canonical "provider adapter as envelope
-translator." Read [`adapters/majel/index.js`](../adapters/majel/index.js)
-before writing a new provider — it is small on purpose.
+The provider-adapter example under [`adapters/majel/index.js`](../adapters/majel/index.js)
+shows the envelope-translation pattern in its smallest useful form.
 
 ## Toolspace-private adapters
 

@@ -1,34 +1,48 @@
-# Example Capability Resolution
+# Example Resolution Patterns
 
-Three worked examples that ship in alpha. All run from any CWD with the
-`axf` binary on PATH.
+Three worked examples drawn from the current alpha manifests. All run
+from any CWD with the `axf` binary on PATH.
 
-## 1. Generic CLI provider — `lex recall`
+## 1. Built-in internal capability — `echo say`
 
 ```
-axf run lex recall --list 3
+axf run echo say --message hello
 ```
 
-Parsed path: scope `global`, module `lex`, capability `recall`.
-Resolved ID: `global.lex.recall` (lifecycleState `active`).
+Parsed path: scope `global`, module `echo`, capability `say`.
+Resolved ID: `global.echo.say` (lifecycleState `active`).
 
 Execution plan:
-- type adapter: `cli`
-- provider adapter: none — Lex emits raw JSON, no envelope to unwrap
-- command: `lex`
-- args: `recall --json --list 3` (`--list` coerced from `"3"` → integer `3`
-  by `argsSchema`)
+- type adapter: `internal`
+- provider adapter: none
+- execution target: handler `echo.say`
+- args: `{ message: "hello" }`
 
 Result shape:
 ```js
 {
   ok: true,
-  data: { frames: [ ... ] },         // Lex's stdout, JSON-parsed
-  meta: { capabilityId: "global.lex.recall", adapterType: "cli", ... }
+  data: "hello",
+  meta: { capabilityId: "global.echo.say", adapterType: "internal", ... }
 }
 ```
 
-## 2. Provider adapter — `majel status`
+## 2. Mounted capability — `toy echo say`
+
+```
+axf run toy echo say --message hello
+```
+
+Parsed path: scope `toolspace-local`, toolspace `toy`, module `echo`,
+capability `say`.
+Resolved ID: `toolspace.toy.echo.say` (lifecycleState `active`).
+
+The `toy` toolspace mount remaps `global.echo` under
+`toolspace.toy.echo` and injects its local defaults. The execution
+target stays the same, but the resolved ID, defaults, and policy
+surface can differ from the global capability.
+
+## 3. Provider-adapter capability — `majel status`
 
 ```
 axf run majel status
@@ -40,59 +54,26 @@ Resolved ID: `global.majel.status` (lifecycleState `active`).
 Execution plan:
 - type adapter: `cli`
 - provider adapter: `majel` (composes `cli`)
-- command: `/srv/majel/bin/ax`
-- args: `status`
+- execution target: command + args declared in the capability manifest
 
-Provider adapter unwraps Majel's envelope:
+Provider adapter unwraps a provider envelope:
 ```js
-// Majel emits:
-{ command: "ax:status", success: true, durationMs: 78, data: { ... } }
+// Provider emits:
+{ command: "<status>", success: true, durationMs: 78, data: { ... } }
 
 // axf returns:
 {
   ok: true,
-  data: { ... },                                   // Majel's `data`, unwrapped
+  data: { ... },
   meta: {
     capabilityId: "global.majel.status",
     adapterType: "cli",
     providerAdapter: "majel",
-    majel: { command: "ax:status", durationMs: 78, timestamp: "..." }
+    majel: { command: "<status>", durationMs: 78, timestamp: "..." }
   }
 }
 ```
 
-When Majel reports `success: false` (e.g. `ax test` without Postgres),
-the provider maps that to `{ ok: false, error: { message }, meta }`
-with `meta.hints` carrying Majel's hints array.
-
-## 3. Mounted capability — `ops majel status`
-
-```
-axf run ops majel status
-```
-
-Parsed path: scope `toolspace-local`, toolspace `ops`, module `majel`,
-capability `status`.
-Resolved ID: `toolspace.ops.majel.status` (lifecycleState `active`).
-
-The `ops` toolspace mount remaps `global.majel` under
-`toolspace.ops.majel`. Execution is identical to example 2 — same
-provider adapter, same envelope unwrap — but the resolved ID is
-distinct so policy and defaults can attach per-toolspace later.
-
-## Illustrative future variant
-
-```
-axf run awa lex frame recall --query recent
-```
-
-Parsed path: toolspace `awa`, module `lex`, capability `frame.recall`.
-Resolved ID: `toolspace.awa.lex.frame.recall`.
-
-Not implemented: the `awa` toolspace mount itself isn't declared in the
-shipped manifests. The shape is supported — `workspace-local` scope is
-implemented, and toolspace mounts can declare a
-`require_workspace_binding` policy that is enforced at execute time. To
-activate this exact path, declare the `awa` toolspace and add a
-`workspace.lex.frame.recall` capability or a mount with appropriate
-defaults.
+When the provider reports `success: false`, the provider adapter maps
+that to `{ ok: false, error: { message }, meta }` while preserving any
+non-fatal hints on `meta`.

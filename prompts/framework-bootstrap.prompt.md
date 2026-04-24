@@ -5,7 +5,7 @@ Design or refine axf as a constrained, workspace-aware launcher and scaffolding 
 
 Required behavior:
 - Read the axf docs packet first, especially the foundation, vocabulary, architecture, manifest, adapter, and lifecycle docs.
-- Do not collapse axf into Lex.
+- Do not let any single provider define the framework.
 - Do not treat axf as a shell alias bucket.
 - Do not invent freeform workflow creation.
 - Preserve the distinction between global modules and toolspace-mounted modules.
@@ -19,6 +19,6 @@ Deliverables:
 
 Constraints:
 - Build axf first
-- Do not migrate AWA/work tooling yet
+- Do not optimize for adjacent-project adoption yet
 - Keep v0 small and battle-testable
 - Use draft/reviewed/active lifecycle thinking for generated units

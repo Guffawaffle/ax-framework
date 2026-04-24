@@ -1,20 +1,19 @@
 # axf
 
-A manifest-driven capability router and scaffolding framework. axf hosts
-provider-built tools (CLIs, libraries, RPCs) behind a single command
-shape with strict lifecycle gates, schema-validated args, and a small
-open adapter contract any agent can extend.
+A manifest-driven capability router and scaffolding framework. axf
+provides a small command surface, explicit manifests, adapter-based
+execution, lifecycle gates, and schema-validated args for workspace
+toolspaces.
 
-> Status: **alpha**. End-to-end with two real providers (Lex, Majel).
-> Manifest version `axf/v0` is stable for the alpha; field renames
-> coming in `v0.1` will go through a deprecation window.
+> Status: **alpha**. The core loop is in place: discover, inspect,
+> execute, scaffold, and promote capabilities through one contract.
+> Manifest version `axf/v0` is the current alpha contract.
 
 ## Install (alpha)
 
 The framework lives at `/srv/axf/` (the GitHub repo is
 [`Guffawaffle/ax-framework`](https://github.com/Guffawaffle/ax-framework)).
-While it shares its name with the [Majel project's `ax` tool](/srv/majel/),
-the framework's binary is exposed on PATH as `axf` to avoid collision:
+Expose the CLI on PATH with:
 
 ```sh
 sudo ln -sfn /srv/axf/bin/axf.js /usr/local/bin/axf
@@ -27,10 +26,10 @@ location. From any directory:
 ```sh
 axf doctor
 axf list
-axf run lex recall --list 3
-axf run majel status
-axf run majel diff
-axf inspect ops majel status
+axf inspect echo say
+axf run echo say --message hello
+axf run toy echo say --message hello
+axf init capability global.acme.status
 ```
 
 `AXF_WORKSPACE=<path>` or `--workspace <path>` overrides discovery.
@@ -42,29 +41,27 @@ axf inspect ops majel status
 - **`internal`** — runs handlers in-process (`adapters/internal/`)
 - **`cli`** — generic subprocess dispatcher with stdout JSON parsing
   (`adapters/cli/`)
-- **`majel`** (provider) — composes `cli`, unwraps Majel's
-  `{command, success, errors[], hints[]}` envelope into axf's normalized
-  result (`adapters/majel/`)
+- **`majel`** (provider) — the current provider-adapter example layered
+  on top of `cli` (`adapters/majel/`)
 
 ### Built-in capabilities
 
 | Capability | Provider | Lifecycle | Notes |
 |---|---|---|---|
-| `global.echo.say` | internal | active | toy proof of internal handlers |
-| `global.lex.recall` | cli | active | wraps system `lex recall --json` |
-| `global.majel.status` | cli + majel | active | wraps `/srv/majel/bin/ax status` |
-| `global.majel.diff` | cli + majel | active | wraps `/srv/majel/bin/ax diff` |
+| `global.echo.say` | internal | active | smallest in-process capability example |
+| `global.lex.recall` | cli | active | sample CLI-backed read capability |
+| `global.majel.status` | cli + majel | active | sample provider-adapter status capability |
+| `global.majel.diff` | cli + majel | active | sample provider-adapter diff capability |
 
 ### Toolspaces
 
-- **`toy`** — re-mounts `echo.say` with a `prefix` default (proof of mounts)
-- **`ops`** — re-mounts `lex.recall`, `majel.status`, `majel.diff` under
-  one operational namespace; same capabilities, single launch surface
+- **`toy`** — smallest mount example; re-mounts `echo.say` with a local default
+- **`ops`** — multi-capability mount example for grouped launch surfaces
 
 ## How to add a new provider
 
-The contract is open. There is no privileged path for any provider —
-Lex, Majel, and any future tool all go through the same scaffolders:
+The contract is open. Every new provider goes through the same
+scaffolders and lifecycle gates:
 
 ```sh
 # 1. Scaffold a draft provider adapter (only if the provider has an
@@ -81,8 +78,9 @@ axf run acme status --any-lifecycle
 
 The four canonical prompts under [`prompts/`](prompts/) walk an agent
 through discovery → planning → scaffolding → review against the actual
-file contract. The Majel adapter at [`adapters/majel/`](adapters/majel/)
-is a small, complete, copy-and-modify example.
+file contract. The provider-adapter example under
+[`adapters/majel/`](adapters/majel/) is intentionally small and useful
+as a shape reference.
 
 ## Layout
 
@@ -111,7 +109,7 @@ test/                           # node:test, zero-dep
 6. [`docs/05-lifecycle-and-promotion.md`](docs/05-lifecycle-and-promotion.md)
 7. [`docs/06-canonical-prompts.md`](docs/06-canonical-prompts.md)
 8. [`docs/07-v0-bootstrap-plan.md`](docs/07-v0-bootstrap-plan.md) —
-   slice history through alpha
+  alpha implementation milestones
 9. [`docs/08-adapter-folder-shape.md`](docs/08-adapter-folder-shape.md)
    — the concrete file contract
 
@@ -125,9 +123,8 @@ Zero dependencies. Uses Node's built-in `node:test`.
 
 ## What is intentionally **not** here
 
-- AWA / work tooling migration (the framework comes first; sensitive
-  adoption waits until lifecycle and policy bodies have shipped)
-- privileged paths for any provider (Lex and Majel are equal citizens)
+- a broad command-alias layer
+- privileged integration paths
 - a plugin marketplace
-- mandatory MCP support
+- mandatory remote execution or MCP support
 - agent-generated capabilities that auto-promote

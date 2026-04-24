@@ -19,7 +19,7 @@ We ship a framework for declaring, generating, and evolving workflows safely.
 
 ## Core problem
 
-The old `ax` pattern has been useful, but it is being asked to do too many jobs at once:
+A single launcher can easily be asked to do too many jobs at once:
 
 - shortcut launcher
 - global command bucket
@@ -38,7 +38,7 @@ That leads to ambiguity around:
 
 ## Strategic direction
 
-axf should evolve from a nickname command into a framework host.
+axf should stay a framework host with a small, deliberate surface.
 
 That means:
 
@@ -62,26 +62,19 @@ axf is the:
 - capability router
 - lifecycle gate
 
-### Lex
+### Providers
 
-Lex remains a bounded subsystem.
+Providers are execution targets, not the framework itself.
 
-Lex is the:
+Providers may be:
 
-- memory substrate
-- frame system
-- policy/context layer
-- receipts/history layer
-- optional shared module family that axf may consume
+- in-process handlers
+- CLIs on PATH
+- repo-local binaries
+- future remote surfaces
 
-Lex should not be broadened accidentally into the universal axf runtime just because it is strategically important.
-
-### lex-mcp
-
-`lex-mcp` remains the MCP adapter for Lex capabilities.
-
-It does not define axf architecture.
-It does not need to enter the picture during axf v0.
+axf may integrate with many providers, but no single provider should
+define the runtime model, manifest vocabulary, or lifecycle rules.
 
 ## Non-goals
 
@@ -90,9 +83,9 @@ axf v0 is not:
 - a bag of shell aliases
 - a dumping ground for every script
 - "agents can build whatever they want"
-- a forced migration path for AWA
+- a migration vehicle for adjacent projects
 - a reason to flatten all commands into one namespace
-- a replacement for Lex
+- a replacement for provider-native tooling
 
 ## Key rule
 
@@ -101,9 +94,10 @@ Then build real toolspaces on top of axf once the framework is stable.
 
 Not the other way around.
 
-## Why AWA is intentionally deferred
+## Why broader adoption is intentionally deferred
 
-AWA/work adoption should wait until axf has been battle-tested in lower-risk spaces.
+Higher-risk adoption should wait until axf has been battle-tested in
+lower-risk spaces.
 
 That means:
 
@@ -111,8 +105,11 @@ That means:
 - no immediate migration expectations
 - no forcing enterprise-ish workflow needs onto the first version
 
-This is important. If axf gets shaped first by sensitive work tooling, the framework will likely overfit too early.
+This is important. If axf gets shaped first by the most constrained
+environments, the framework will likely overfit too early.
 
 ## North star statement
 
-axf provides a constrained, mountable framework where toolspaces can declare, generate, and evolve workflows safely, including scoped access to shared modules like Lex.
+axf provides a constrained, mountable framework where toolspaces can
+declare, generate, and evolve workflows safely, including scoped
+defaults, policies, and capability resolution.

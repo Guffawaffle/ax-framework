@@ -3,7 +3,8 @@
 ## Objective
 
 Build the smallest version of axf that proves the framework shape, then
-prove it against two real providers. Optimize for clarity,
+prove it against built-in adapters and representative integration
+patterns. Optimize for clarity,
 inspectability, and safety — not completeness.
 
 ## Goals
@@ -19,14 +20,14 @@ axf should prove:
 
 ## What is *not* in alpha
 
-- AWA / work tooling migration
-- legacy command backfill as the main success metric
+- broad migration programs
+- CLI surface expansion before the core loop is stable
 - plugin ecosystems beyond the adapter contract
 - mandatory MCP
 - mandatory provider-native axf hooks
 - automatic promotion of agent-generated capabilities
 
-## Slice history
+## Implementation milestones
 
 ### Slices 1–6: prototype runtime
 
@@ -49,10 +50,9 @@ axf should prove:
   longer auto-coerces numerics.
 - Policy hook present; declared-but-unenforced policies surface as
   doctor warnings.
-- Lex shipped as the first non-toy provider via the generic `cli`
-  adapter (no privileged path).
+- A sample CLI-backed provider shipped via the generic `cli` adapter.
 
-### Slice 8: provider adapters (open contract) + Majel as proof
+### Slice 8: provider adapters (open contract) + wrapped CLI proof
 
 - New `kind: "provider"` adapter folder shape under `adapters/<name>/`.
   Provider adapters declare `composes: <type-adapter>` and wrap a type
@@ -69,23 +69,23 @@ axf should prove:
 - Workspace-root resolution (`src/core/workspace.js`): explicit
   `--workspace`, `AXF_WORKSPACE`, marker-file walk from cwd, marker walk
   from script location, then cwd. Lets `axf` work from any directory.
-- `axf` symlinked at `/usr/local/bin/axf` as the alpha PATH binary;
-  collision with the unrelated Majel `ax` tool deliberately avoided
-  until axf can host it as a first-class toolspace.
-- Majel provider adapter at `adapters/majel/` unwraps the Majel
-  `{command, success, durationMs, data, errors[], hints[]}` envelope.
-- Capabilities `global.majel.status` and `global.majel.diff` shipped
-  active; `ops` toolspace mounts both Lex and Majel.
+- `axf` symlinked at `/usr/local/bin/axf` as the alpha PATH binary.
+- The provider adapter at `adapters/majel/` proves envelope
+  normalization on top of the generic `cli` adapter.
+- Additional sample provider-backed capabilities and toolspace mounts
+  ship as end-to-end references.
 - Canonical adapter prompts (`prompts/adapter-{discovery,planning,scaffold,review}.prompt.md`)
-  rewritten to reference the actual file contract and the Majel example.
+  rewritten to reference the actual file contract and the shipped
+  provider-adapter example.
 
 ## Definition of success for alpha (met)
 
 1. A global capability resolves and executes from any CWD via PATH-installed `axf`.
 2. A mounted capability resolves differently under a toolspace with injected defaults.
 3. A draft adapter and capability scaffold are created from declared templates.
-4. Two real providers (Lex, Majel) wired in through the public contract,
-   one through the generic CLI path and one through a provider adapter.
+4. Two representative integration patterns are wired through the public
+  contract, one through the generic CLI path and one through a
+  provider adapter.
 5. An agent can extend axf by following the canonical prompts without
    reading framework source.
 

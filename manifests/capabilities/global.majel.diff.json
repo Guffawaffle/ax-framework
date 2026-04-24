@@ -1,7 +1,7 @@
 {
   "manifestVersion": "axf/v0",
   "id": "global.majel.diff",
-  "summary": "Majel uncommitted changes summary (file count, insertions, deletions, file list).",
+  "summary": "Diff summary example routed through a provider adapter.",
   "provider": "majel",
   "adapterType": "cli",
   "providerAdapter": "majel",

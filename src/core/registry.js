@@ -8,7 +8,7 @@ import {
     validateToolspaceManifest
 } from "./manifest-validator.js";
 
-export const SUPPORTED_MANIFEST_VERSIONS = new Set(["axf/v0", "ax/v0"]);
+export const SUPPORTED_MANIFEST_VERSIONS = new Set(["axf/v0"]);
 
 export async function createRegistry({ rootDir, strict = true } = {}) {
     const manifestRoot = path.join(rootDir, "manifests");

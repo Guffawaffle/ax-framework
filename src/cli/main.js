@@ -49,7 +49,8 @@ export async function main(argv, env = {}) {
         return;
     }
     if (command === "inspect") {
-        await inspectCommand(registry, rest, ws, processEnv);
+        const adapters = await loadAdapters({ rootDir });
+        await inspectCommand(registry, adapters, rest, ws, processEnv);
         return;
     }
     if (command === "run") {
@@ -116,7 +117,7 @@ async function listCommand(registry, tokens) {
     }
 }
 
-async function inspectCommand(registry, tokens, ws = null, env = process.env) {
+async function inspectCommand(registry, adapters, tokens, ws = null, env = process.env) {
     const { pathTokens, options } = splitCommandTokens(tokens);
     if (pathTokens.length === 0) {
         throw new AxError("inspect requires a capability id or CLI path", 2);
@@ -130,9 +131,30 @@ async function inspectCommand(registry, tokens, ws = null, env = process.env) {
     const launchPlan = cap.adapterType === "cli"
         ? resolveCliLaunchPlan(cap, { runtime, env })
         : null;
+    const typeAdapter = adapters?.get(cap.adapterType, { toolspace: cap.toolspace }) ?? null;
+    const providerAdapter = cap.providerAdapter
+        ? adapters?.getProvider(cap.providerAdapter, { toolspace: cap.toolspace }) ?? null
+        : null;
+    const adapterProvenance = typeAdapter
+        ? {
+            type: cap.adapterType,
+            provenance: typeAdapter.provenance,
+            manifestPath: typeAdapter.manifestPath,
+            provider: providerAdapter
+                ? {
+                    name: cap.providerAdapter,
+                    provenance: providerAdapter.provenance,
+                    manifestPath: providerAdapter.manifestPath
+                }
+                : null
+        }
+        : null;
 
     if (options.json) {
-        printJson(launchPlan ? { ...resolved, launchPlan } : resolved);
+        const payload = { ...resolved };
+        if (launchPlan) payload.launchPlan = launchPlan;
+        if (adapterProvenance) payload.adapter = adapterProvenance;
+        printJson(payload);
         return;
     }
 
@@ -141,8 +163,14 @@ async function inspectCommand(registry, tokens, ws = null, env = process.env) {
     console.log(`scope: ${cap.scope}`);
     console.log(`lifecycle: ${cap.lifecycleState}`);
     console.log(`adapter: ${cap.adapterType}`);
+    if (adapterProvenance) {
+        console.log(`adapter.provenance: ${adapterProvenance.provenance}`);
+    }
     if (cap.providerAdapter) {
         console.log(`provider: ${cap.providerAdapter}`);
+        if (adapterProvenance?.provider) {
+            console.log(`provider.provenance: ${adapterProvenance.provider.provenance}`);
+        }
     }
     if (cap.sourceCapabilityId) {
         console.log(`source: ${cap.sourceCapabilityId}`);
@@ -388,6 +416,12 @@ async function doctorCommand(registry, adapters, tokens, ws = null) {
     console.log(`capabilities: ${report.capabilityCount}`);
     console.log(`toolspaces: ${report.toolspaceCount}`);
     console.log(`adapters: ${report.adapterCount}`);
+    if (report.adaptersByType?.length > 0) {
+        for (const a of report.adaptersByType) {
+            const id = a.kind === "provider" ? `provider:${a.name}` : `type:${a.type}`;
+            console.log(`  - ${id} (${a.provenance})`);
+        }
+    }
     if (report.rejectedCount > 0) {
         console.log(`rejected manifests (strict mode): ${report.rejectedCount}`);
     }

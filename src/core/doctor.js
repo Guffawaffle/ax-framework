@@ -111,6 +111,50 @@ export function inspectRegistry(registry, { adapters } = {}) {
         manifestCount: registry.files.length,
         rejectedCount: registry.rejected.length,
         adapterCount: adapters ? adapters.adapters.size : 0,
+        adaptersByType: adapters ? collectAdapterProvenance(adapters) : [],
         issues
     };
+}
+
+function collectAdapterProvenance(adapters) {
+    const out = [];
+    for (const r of adapters.types.values()) {
+        out.push({
+            kind: "type-adapter",
+            type: r.manifest.type,
+            provenance: r.provenance,
+            manifestPath: r.manifestPath
+        });
+    }
+    for (const r of adapters.providers.values()) {
+        out.push({
+            kind: "provider",
+            name: r.manifest.name,
+            composes: r.manifest.composes,
+            provenance: r.provenance,
+            manifestPath: r.manifestPath
+        });
+    }
+    for (const [ts, m] of adapters.toolspaceTypes ?? new Map()) {
+        for (const r of m.values()) {
+            out.push({
+                kind: "type-adapter",
+                type: r.manifest.type,
+                provenance: r.provenance ?? `toolspace:${ts}`,
+                manifestPath: r.manifestPath
+            });
+        }
+    }
+    for (const [ts, m] of adapters.toolspaceProviders ?? new Map()) {
+        for (const r of m.values()) {
+            out.push({
+                kind: "provider",
+                name: r.manifest.name,
+                composes: r.manifest.composes,
+                provenance: r.provenance ?? `toolspace:${ts}`,
+                manifestPath: r.manifestPath
+            });
+        }
+    }
+    return out;
 }

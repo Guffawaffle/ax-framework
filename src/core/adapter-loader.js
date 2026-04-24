@@ -20,13 +20,26 @@
 // exposes the type adapter; the provider can pre-process args, delegate
 // to the type adapter, post-process the result, or all three.
 
-import { readFile, readdir } from "node:fs/promises";
+import { readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { AxError } from "./errors.js";
 
 const SUPPORTED_MANIFEST_VERSIONS = new Set(["axf/v0"]);
 const KNOWN_KINDS = new Set(["type-adapter", "provider"]);
+
+// Framework-owned generic type adapters that are eligible for fallback
+// loading when a workspace does not vendor its own. Provider adapters
+// are intentionally NOT eligible: providers stay explicit and repo-owned
+// so that toolspace and provider quirks are never silently injected.
+const FRAMEWORK_FALLBACK_TYPES = new Set(["cli", "internal"]);
+
+// The adapters/ directory shipped with the axf framework itself.
+// Resolved once relative to this module's own location so it works
+// whether axf is installed globally, linked, or run from source.
+export const FRAMEWORK_ADAPTERS_ROOT = fileURLToPath(
+    new URL("../../adapters/", import.meta.url)
+);
 
 // Two visibility scopes for adapters:
 //
@@ -42,12 +55,33 @@ const KNOWN_KINDS = new Set(["type-adapter", "provider"]);
 // behavior (e.g. wrap Lex with extra normalization) without polluting
 // the global adapter set.
 
-export async function loadAdapters({ rootDir }) {
+export async function loadAdapters({
+    rootDir,
+    frameworkAdaptersRoot = FRAMEWORK_ADAPTERS_ROOT,
+    enableFrameworkFallback = true
+} = {}) {
     const adaptersRoot = path.join(rootDir, "adapters");
     const registry = new AdapterRegistry(rootDir);
     await registry.loadFrom(adaptersRoot);
     await registry.loadToolspacePrivateFrom(path.join(rootDir, "toolspaces"));
+    if (enableFrameworkFallback && frameworkAdaptersRoot) {
+        // Skip the fallback when the workspace IS the framework checkout;
+        // the workspace pass already loaded the same files from disk.
+        const sameRoot = await pathsEqual(adaptersRoot, frameworkAdaptersRoot);
+        if (!sameRoot) {
+            await registry.loadFrameworkFallbackFrom(frameworkAdaptersRoot);
+        }
+    }
     return registry;
+}
+
+async function pathsEqual(a, b) {
+    try {
+        const [ra, rb] = await Promise.all([realpath(a), realpath(b)]);
+        return ra === rb;
+    } catch {
+        return path.resolve(a) === path.resolve(b);
+    }
 }
 
 export class AdapterRegistry {
@@ -82,6 +116,41 @@ export class AdapterRegistry {
         }
     }
 
+    // Load framework-owned generic type adapters (cli, internal) only
+    // when the workspace does not already provide them. Workspace-global
+    // and toolspace-private adapters always win; this fallback exists so
+    // a fresh workspace can run capabilities without vendoring boilerplate.
+    //
+    // Provider adapters are NOT loaded here: providers must stay explicit
+    // and repo-owned so quirks are never silently injected.
+    async loadFrameworkFallbackFrom(frameworkAdaptersRoot) {
+        let entries;
+        try {
+            entries = await readdir(frameworkAdaptersRoot, { withFileTypes: true });
+        } catch (error) {
+            if (error.code === "ENOENT") return;
+            throw error;
+        }
+        for (const entry of entries) {
+            if (!entry.isDirectory()) continue;
+            const adapterDir = path.join(frameworkAdaptersRoot, entry.name);
+            // Peek the manifest so we can filter by kind/type before importing.
+            let manifest;
+            try {
+                manifest = JSON.parse(
+                    await readFile(path.join(adapterDir, "adapter.manifest.json"), "utf8")
+                );
+            } catch {
+                continue; // ignore malformed framework dirs; nothing to fall back to
+            }
+            if (manifest.kind === "adapter") manifest.kind = "type-adapter";
+            if (manifest.kind !== "type-adapter") continue;
+            if (!FRAMEWORK_FALLBACK_TYPES.has(manifest.type)) continue;
+            if (this.types.has(manifest.type)) continue; // workspace wins
+            await this.loadAdapter(adapterDir, { provenance: "framework" });
+        }
+    }
+
     // Scan toolspaces/<name>/adapters/<adapter>/ for each toolspace dir.
     // Missing root is normal (toolspace-private adapters are optional).
     async loadToolspacePrivateFrom(toolspacesRoot) {
@@ -111,9 +180,11 @@ export class AdapterRegistry {
         }
     }
 
-    async loadAdapter(adapterDir, { toolspace = null } = {}) {
+    async loadAdapter(adapterDir, { toolspace = null, provenance = null } = {}) {
         const manifestPath = path.join(adapterDir, "adapter.manifest.json");
         const relativeDir = path.relative(this.rootDir, adapterDir);
+        const resolvedProvenance = provenance
+            ?? (toolspace ? `toolspace:${toolspace}` : "workspace");
 
         let manifest;
         try {
@@ -165,9 +236,12 @@ export class AdapterRegistry {
 
         const record = {
             manifest,
-            manifestPath: path.relative(this.rootDir, manifestPath),
+            manifestPath: provenance === "framework"
+                ? path.relative(FRAMEWORK_ADAPTERS_ROOT, manifestPath)
+                : path.relative(this.rootDir, manifestPath),
             execute: module.execute,
-            toolspace
+            toolspace,
+            provenance: resolvedProvenance
         };
 
         if (manifest.kind === "type-adapter") {

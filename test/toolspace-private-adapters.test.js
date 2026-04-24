@@ -116,7 +116,7 @@ test("toolspace-private adapters load alongside globals", async () => {
     const root = await bootstrap();
     await writeGlobalEcho(root);
     await writeToolspacePrivateInternal(root);
-    const adapters = await loadAdapters({ rootDir: root });
+    const adapters = await loadAdapters({ rootDir: root, enableFrameworkFallback: false });
     assert.equal(adapters.types.size, 1, "global types preserved");
     assert.equal(adapters.toolspaceTypes.get("tly")?.size, 1);
     assert.equal(adapters.adapterCount, 2);

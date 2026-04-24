@@ -1,22 +1,14 @@
 import { spawnSync } from "node:child_process";
 import { AxError } from "../../src/core/errors.js";
+import { resolveCliLaunchPlan } from "../../src/core/cli-launch-plan.js";
 
 const FRAMEWORK_ARG_KEYS = new Set(["json", "allow-draft", "any-lifecycle"]);
 
-export async function execute(resolved) {
+export async function execute(resolved, ctx = {}) {
     const { capability, args } = resolved;
-    const command = capability.executionTarget?.command;
-    const baseArgs = capability.executionTarget?.args ?? [];
-
-    if (!command) {
-        throw new AxError(
-            `cli capability '${capability.id}' is missing executionTarget.command`,
-            2
-        );
-    }
-
-    const cliArgs = [...baseArgs, ...argsToCliArgs(args)];
-    const result = spawnSync(command, cliArgs, {
+    const launchPlan = resolveCliLaunchPlan(capability, { runtime: ctx.runtime ?? null });
+    const cliArgs = [...launchPlan.argsPrefix, ...argsToCliArgs(args)];
+    const result = spawnSync(launchPlan.command, cliArgs, {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"]
     });
@@ -53,8 +45,14 @@ export async function execute(resolved) {
         meta: {
             capabilityId: capability.id,
             adapterType: "cli",
-            command,
-            args: cliArgs
+            command: launchPlan.command,
+            args: cliArgs,
+            launchPlan: {
+                command: launchPlan.command,
+                args: cliArgs,
+                targetPath: launchPlan.targetPath,
+                targetSource: launchPlan.targetSource
+            }
         }
     };
 }

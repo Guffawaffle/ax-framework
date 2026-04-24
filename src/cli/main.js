@@ -8,6 +8,7 @@ import { loadAdapters } from "../core/adapter-loader.js";
 import { findWorkspaceRoot } from "../core/workspace.js";
 import { parseOptionTokens, splitCommandTokens } from "./options.js";
 import { AxError } from "../core/errors.js";
+import { resolveCliLaunchPlan } from "../core/cli-launch-plan.js";
 
 const COMMANDS = new Set(["list", "inspect", "run", "init", "doctor", "promote", "demote", "help"]);
 
@@ -48,7 +49,7 @@ export async function main(argv, env = {}) {
         return;
     }
     if (command === "inspect") {
-        await inspectCommand(registry, rest);
+        await inspectCommand(registry, rest, ws, processEnv);
         return;
     }
     if (command === "run") {
@@ -115,20 +116,26 @@ async function listCommand(registry, tokens) {
     }
 }
 
-async function inspectCommand(registry, tokens) {
+async function inspectCommand(registry, tokens, ws = null, env = process.env) {
     const { pathTokens, options } = splitCommandTokens(tokens);
     if (pathTokens.length === 0) {
         throw new AxError("inspect requires a capability id or CLI path", 2);
     }
 
     const resolved = registry.resolveInspectable(pathTokens);
+    const cap = resolved.capability;
+    const runtime = ws
+        ? { workspace: { root: ws.root, viaMarker: ws.viaMarker, source: ws.source } }
+        : null;
+    const launchPlan = cap.adapterType === "cli"
+        ? resolveCliLaunchPlan(cap, { runtime, env })
+        : null;
 
     if (options.json) {
-        printJson(resolved);
+        printJson(launchPlan ? { ...resolved, launchPlan } : resolved);
         return;
     }
 
-    const cap = resolved.capability;
     console.log(`${cap.id}`);
     console.log(`summary: ${cap.summary}`);
     console.log(`scope: ${cap.scope}`);
@@ -145,6 +152,12 @@ async function inspectCommand(registry, tokens) {
     }
     if (resolved.injectedDefaults && Object.keys(resolved.injectedDefaults).length > 0) {
         console.log(`defaults: ${JSON.stringify(resolved.injectedDefaults)}`);
+    }
+    if (launchPlan) {
+        console.log(`launch.command: ${launchPlan.command}`);
+        if (launchPlan.targetPath) {
+            console.log(`launch.target: ${launchPlan.targetPath} (${launchPlan.targetSource})`);
+        }
     }
 }
 

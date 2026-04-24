@@ -23,7 +23,7 @@ adapters/<type>/
   "type": "<adapter-type>",
   "summary": "What this adapter does, in one line.",
   "entry": "index.js",
-  "supportedExecutionTargets": ["command"],
+  "supportedExecutionTargets": ["command", "target"],
   "lifecycleState": "draft",
   "owner": "<owner>"
 }
@@ -39,6 +39,7 @@ export async function execute(resolved /*, ctx */) {
   // resolved.capability  -> the resolved capability manifest
   // resolved.args        -> validated + coerced args (per argsSchema)
   // resolved.input       -> parsed CLI input
+  // ctx.runtime          -> optional runtime context for launch-plan resolution
   return {
     ok: true,
     data: ...,
@@ -47,7 +48,9 @@ export async function execute(resolved /*, ctx */) {
 }
 ```
 
-`ctx` is unused for type adapters; provider adapters receive it.
+`ctx` is optional for type adapters and becomes useful when execution depends on
+runtime context such as workspace-relative path resolution. Provider adapters
+receive the same context.
 
 ## Provider adapter
 

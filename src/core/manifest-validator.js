@@ -164,11 +164,38 @@ export function validateCapabilityManifest(manifest, label) {
                 message: `${label}: internal adapter requires executionTarget.handler`
             });
         }
-        if (manifest.adapterType === "cli" && !manifest.executionTarget.command) {
-            issues.push({
-                severity: "error",
-                message: `${label}: cli adapter requires executionTarget.command`
-            });
+        if (manifest.adapterType === "cli") {
+            const hasCommand = typeof manifest.executionTarget.command === "string";
+            const hasTargetPath =
+                typeof manifest.executionTarget.target?.path === "string";
+            if (!hasCommand && !hasTargetPath) {
+                issues.push({
+                    severity: "error",
+                    message: `${label}: cli adapter requires executionTarget.command or executionTarget.target.path`
+                });
+            }
+            if (
+                manifest.executionTarget.target !== undefined &&
+                (typeof manifest.executionTarget.target !== "object" ||
+                    Array.isArray(manifest.executionTarget.target) ||
+                    typeof manifest.executionTarget.target.path !== "string")
+            ) {
+                issues.push({
+                    severity: "error",
+                    message: `${label}: cli adapter executionTarget.target.path must be a string when target is declared`
+                });
+            }
+            if (
+                manifest.executionTarget.launcher !== undefined &&
+                (typeof manifest.executionTarget.launcher !== "object" ||
+                    Array.isArray(manifest.executionTarget.launcher) ||
+                    typeof manifest.executionTarget.launcher.command !== "string")
+            ) {
+                issues.push({
+                    severity: "error",
+                    message: `${label}: cli adapter executionTarget.launcher.command must be a string when launcher is declared`
+                });
+            }
         }
     }
 

@@ -89,7 +89,46 @@ test("strict mode refuses to load a capability with adapter/executionTarget mism
         assert.equal(registry.capabilities.size, 0);
         assert.ok(
             registry.loadIssues.some((i) =>
-                /cli adapter requires executionTarget.command/.test(i.message)
+                /cli adapter requires executionTarget.command or executionTarget.target.path/.test(i.message)
+            )
+        );
+    } finally {
+        await rm(tmp, { recursive: true, force: true });
+    }
+});
+
+test("strict mode refuses to load a cli capability with an invalid launcher shape", async () => {
+    const tmp = await mkdtemp(path.join(os.tmpdir(), "ax-strict-"));
+    try {
+        await mkdir(path.join(tmp, "manifests", "capabilities"), { recursive: true });
+        await writeFile(
+            path.join(tmp, "manifests", "capabilities", "global.bad.launcher.json"),
+            JSON.stringify({
+                manifestVersion: "axf/v0",
+                id: "global.bad.launcher",
+                summary: "missing launcher command",
+                provider: "x",
+                adapterType: "cli",
+                executionTarget: {
+                    launcher: {},
+                    target: { path: ".ax/ax.ps1", relativeTo: "workspace" }
+                },
+                argsSchema: { type: "object" },
+                outputModes: ["json"],
+                sideEffects: "none",
+                scope: "global",
+                lifecycleState: "active",
+                defaults: {},
+                policies: [],
+                owner: "test"
+            })
+        );
+
+        const registry = await createRegistry({ rootDir: tmp });
+        assert.equal(registry.capabilities.size, 0);
+        assert.ok(
+            registry.loadIssues.some((i) =>
+                /cli adapter executionTarget.launcher.command must be a string/.test(i.message)
             )
         );
     } finally {

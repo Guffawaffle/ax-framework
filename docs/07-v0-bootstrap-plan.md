@@ -1,119 +1,115 @@
-# AX v0 Bootstrap Plan
+# AX v0 → alpha bootstrap plan
 
 ## Objective
 
-Build the smallest version of AX that proves the framework shape.
+Build the smallest version of AX that proves the framework shape, then
+prove it against two real providers. Optimize for clarity,
+inspectability, and safety — not completeness.
 
-Do not optimize for completeness.
-Optimize for clarity, inspectability, and safety.
+## Goals
 
-## v0 goals
+AX should prove:
 
-AX v0 should prove:
-
-- workspace binding
+- workspace binding (CWD-independent execution)
 - manifest-based capability resolution
-- module mounts
-- adapter execution through at least one provider style
+- module mounts (toolspaces)
+- adapter execution through both type adapters and provider adapters
 - lifecycle gating for generated units
-- scaffoldability for future growth
+- scaffoldability for future growth — not just by us
 
-## What not to do in v0
+## What is *not* in alpha
 
-Do not:
+- AWA / work tooling migration
+- legacy command backfill as the main success metric
+- plugin ecosystems beyond the adapter contract
+- mandatory MCP
+- mandatory provider-native AX hooks
+- automatic promotion of agent-generated capabilities
 
-- backfill every legacy AX command
-- build AWA support first
-- over-design plugin ecosystems
-- make MCP a blocker
-- make provider-native hooks mandatory
-- let agent-generated code become active automatically
+## Slice history
 
-## Suggested v0 command surface
+### Slices 1–6: prototype runtime
 
-- `ax list`
-- `ax inspect <id-or-path>`
-- `ax run <id-or-path>`
-- `ax init toolspace`
-- `ax init capability`
-- `ax doctor`
+- Slice 1 — parser + path model (`src/core/path-model.js`)
+- Slice 2 — manifest registry (`src/core/registry.js`)
+- Slice 3 — resolver with default injection (`src/core/resolver.js`)
+- Slice 4 — executor (initial; later split out)
+- Slice 5 — lifecycle gates (`active` default; `--any-lifecycle` opt-in,
+  `--allow-draft` retained as deprecated alias)
+- Slice 6 — `ax init {toolspace,capability}` scaffolding
 
-Optional if it comes naturally:
-- `ax init adapter`
-- `ax inspect draft`
+### Slice 7: adapter spine + strict gates
 
-## Suggested v0 implementation slices
+- Execution dispatched through `adapters/<type>/` folders.
+- `internal` and `cli` ship as built-in type adapters.
+- `ax init adapter <type>` scaffolds a draft type-adapter.
+- `manifestVersion: "ax/v0"` required; strict registry refuses bad
+  manifests at load time.
+- `argsSchema` validation + coercion at resolve time; CLI parsing no
+  longer auto-coerces numerics.
+- Policy hook present; declared-but-unenforced policies surface as
+  doctor warnings.
+- Lex shipped as the first non-toy provider via the generic `cli`
+  adapter (no privileged path).
 
-### Slice 1: parser + path model
+### Slice 8: provider adapters (open contract) + Majel as proof
 
-Support:
-- global path parsing
-- toolspace-prefixed path parsing
-- normalized internal path representation
+- New `kind: "provider"` adapter folder shape under `adapters/<name>/`.
+  Provider adapters declare `composes: <type-adapter>` and wrap a type
+  adapter to normalize provider-specific quirks (envelopes, hints,
+  envelope-level errors).
+- Existing two adapter manifests migrated from `kind: "adapter"` to
+  `kind: "type-adapter"`. Single source of truth in
+  `docs/04-adapter-contract.md` and `docs/08-adapter-folder-shape.md`.
+- Capability manifests gain optional `providerAdapter: "<name>"`. Without
+  it, the generic type adapter handles execution. With it, the provider
+  composes over the type adapter through the executor.
+- `ax init adapter --kind provider <name> [--composes <type>]` scaffolds
+  a draft provider adapter.
+- Workspace-root resolution (`src/core/workspace.js`): explicit
+  `--workspace`, `AX_WORKSPACE`, marker-file walk from cwd, marker walk
+  from script location, then cwd. Lets `axf` work from any directory.
+- `axf` symlinked at `/usr/local/bin/axf` as the alpha PATH binary;
+  collision with the unrelated Majel `ax` tool deliberately avoided
+  until AX can host it as a first-class toolspace.
+- Majel provider adapter at `adapters/majel/` unwraps the Majel
+  `{command, success, durationMs, data, errors[], hints[]}` envelope.
+- Capabilities `global.majel.status` and `global.majel.diff` shipped
+  active; `ops` toolspace mounts both Lex and Majel.
+- Canonical adapter prompts (`prompts/adapter-{discovery,planning,scaffold,review}.prompt.md`)
+  rewritten to reference the actual file contract and the Majel example.
 
-Initial prototype status: implemented in `src/core/path-model.js`.
+## Definition of success for alpha (met)
 
-### Slice 2: manifest registry
+1. A global capability resolves and executes from any CWD via PATH-installed `axf`.
+2. A mounted capability resolves differently under a toolspace with injected defaults.
+3. A draft adapter and capability scaffold are created from declared templates.
+4. Two real providers (Lex, Majel) wired in through the public contract,
+   one through the generic CLI path and one through a provider adapter.
+5. An agent can extend AX by following the canonical prompts without
+   reading framework source.
 
-Support:
-- capability manifests
-- toolspace manifests
-- mount manifests
+## Known follow-ons (post-alpha)
 
-Initial prototype status: implemented in `src/core/registry.js` with manifests under `manifests/`.
+All four below shipped with the post-alpha follow-on pass; the Ajv item
+remains deferred on purpose.
 
-### Slice 3: resolver
-
-Support:
-- scope-aware lookup
-- fully qualified capability ID resolution
-- default injection
-
-Initial prototype status: implemented in `src/core/resolver.js`; mounted capabilities are synthesized with explicit `toolspace.<name>...` IDs.
-
-### Slice 4: executor
-
-Support:
-- internal execution
-- CLI adapter execution
-- normalized result model
-
-Initial prototype status: implemented in `src/core/executor.js`; the `echo` provider proves internal execution and CLI execution has a minimal bridge.
-
-### Slice 5: lifecycle gates
-
-Support:
-- draft/reviewed/active states
-- hiding or flagging drafts
-
-Initial prototype status: active capabilities are listed and executable by default; drafts require explicit inspection or `--allow-draft` execution.
-
-### Slice 6: scaffolding
-
-Support:
-- toolspace scaffold
-- capability scaffold
-- adapter scaffold stub if practical
-
-Initial prototype status: `ax init toolspace <name>` and `ax init capability <id>` create draft manifests only.
-
-## Low-risk proving grounds
-
-Use:
-- toy toolspace
-- sample provider
-- maybe bounded Lex integration once the core works
-
-Do not start with:
-- production work tooling
-- enterprise-ish policy pressure
-- legacy command parity as the main success metric
-
-## Definition of success for v0
-
-AX v0 is successful if it can show:
-
-1. a global capability resolved and executed
-2. a mounted capability resolved differently under a toolspace
-3. a draft adapter scaffold created from a declared template
-4. enough structure that an agent can extend AX without inventing architecture
+- **Deferred.** Replace the in-house schema subset with Ajv. Adding a
+  runtime dep changes AX's zero-dep stance (a foundational property),
+  so the swap waits until validation strain is real, not theoretical.
+  Single-file swap behind `assertValid` remains the plan when the time
+  comes.
+- **Done.** `kind: "adapter"` legacy spelling is accepted by the loader
+  with a deprecation warning and silently rewritten to `type-adapter`
+  in memory. Slated for removal in v0.1.
+- **Done.** `--allow-draft` now emits a one-line stderr deprecation
+  warning on use; canonical name is `--any-lifecycle`. Removal in v0.1.
+- **Done.** Two new policy bodies beyond `require_workspace_binding`:
+  `require_active_lifecycle` (binding refusal of non-active capabilities
+  at execution time, independent of the framework `--any-lifecycle`
+  flag) and `forbid_network` (refuses capabilities whose declared
+  `sideEffects` include network egress).
+- **Done.** `axf demote <id> --to <state>` ships as the symmetric
+  inverse of `promote`, enforcing direction so an agent that means to
+  walk a capability back can do so without holding a regression-shaped
+  promote in its head. Both commands share the edit + revalidate path.

@@ -79,9 +79,9 @@ The level at which a capability is resolved.
 
 Baseline scopes:
 
-- `global`
-- `toolspace-local`
-- `workspace-local`
+- `global` *(implemented)*
+- `toolspace-local` *(implemented)*
+- `workspace-local` *(implemented; capabilities prefixed `workspace.<module>.<cap>`. Implicitly require the `require_workspace_binding` policy at runtime.)*
 
 ## Manifest
 

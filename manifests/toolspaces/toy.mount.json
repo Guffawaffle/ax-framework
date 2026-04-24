@@ -1,19 +1,14 @@
 {
+  "manifestVersion": "ax/v0",
   "toolspace": "toy",
   "lifecycleState": "active",
   "moduleMounts": {
     "echo": {
       "source": "global.echo",
       "mode": "proxy",
-      "capabilities": [
-        "say"
-      ],
-      "defaults": {
-        "prefix": "toy"
-      },
-      "policies": [
-        "require_workspace_binding"
-      ]
+      "capabilities": ["say"],
+      "defaults": { "prefix": "toy" },
+      "policies": ["require_workspace_binding"]
     }
   }
 }

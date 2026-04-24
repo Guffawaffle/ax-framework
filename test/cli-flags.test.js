@@ -1,0 +1,246 @@
+// Coverage gaps from round 1 review: end-to-end CLI flag behavior,
+// inspect on workspace-local capabilities, promote JSON output,
+// resolveInspectable ambiguity (global vs workspace-local), mounted
+// capability promote refusal.
+
+import test from "node:test";
+import assert from "node:assert/strict";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { main } from "../src/cli/main.js";
+import { createRegistry } from "../src/core/registry.js";
+import { resolveCapability } from "../src/core/resolver.js";
+
+async function bootstrap({ withInternal = true } = {}) {
+    const root = await mkdtemp(path.join(os.tmpdir(), "ax-cli-flag-"));
+    await writeFile(
+        path.join(root, "ax.workspace.json"),
+        JSON.stringify({ manifestVersion: "ax/v0", name: "fixture" })
+    );
+    await mkdir(path.join(root, "manifests", "capabilities"), { recursive: true });
+    if (withInternal) {
+        const adapterDir = path.join(root, "adapters", "internal");
+        await mkdir(adapterDir, { recursive: true });
+        await writeFile(
+            path.join(adapterDir, "adapter.manifest.json"),
+            JSON.stringify({
+                manifestVersion: "ax/v0",
+                kind: "type-adapter",
+                type: "internal",
+                entry: "index.js",
+                lifecycleState: "active"
+            })
+        );
+        await writeFile(
+            path.join(adapterDir, "index.js"),
+            `export async function execute(resolved) {
+                return {
+                    ok: true,
+                    data: resolved.args?.message ?? null,
+                    meta: { capabilityId: resolved.capability.id, adapterType: "internal" }
+                };
+            }`
+        );
+    }
+    return root;
+}
+
+function basicCap(overrides = {}) {
+    return {
+        manifestVersion: "ax/v0",
+        id: "global.demo.thing",
+        summary: "demo",
+        provider: "demo",
+        adapterType: "internal",
+        executionTarget: { handler: "echo.say" },
+        argsSchema: {
+            type: "object",
+            properties: { message: { type: "string" } }
+        },
+        outputModes: ["json"],
+        sideEffects: "none",
+        scope: "global",
+        lifecycleState: "draft",
+        defaults: {},
+        policies: [],
+        owner: "test",
+        ...overrides
+    };
+}
+
+async function writeCap(root, cap) {
+    const file = path.join(root, "manifests", "capabilities", `${cap.id}.json`);
+    await writeFile(file, JSON.stringify(cap, null, 2) + "\n");
+    return file;
+}
+
+// Capture stdout from main() for JSON-output tests.
+function captureStdout(fn) {
+    const original = process.stdout.write.bind(process.stdout);
+    const chunks = [];
+    process.stdout.write = (chunk, ...rest) => {
+        chunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+        return true;
+    };
+    return Promise.resolve(fn())
+        .finally(() => {
+            process.stdout.write = original;
+        })
+        .then(() => chunks.join(""));
+}
+
+test("run --any-lifecycle executes a draft capability", async () => {
+    const root = await bootstrap();
+    await writeCap(root, basicCap({ lifecycleState: "draft" }));
+    // Without the flag this should throw.
+    await assert.rejects(
+        () => main(["--workspace", root, "run", "demo", "thing", "--message", "hi"]),
+        /draft/
+    );
+    // With the flag it runs.
+    const out = await captureStdout(() =>
+        main(["--workspace", root, "run", "demo", "thing", "--message", "hi", "--any-lifecycle", "--json"])
+    );
+    const result = JSON.parse(out);
+    assert.equal(result.ok, true);
+    assert.equal(result.data, "hi");
+});
+
+test("run --allow-draft (deprecated) still works as alias", async () => {
+    const root = await bootstrap();
+    await writeCap(root, basicCap({ lifecycleState: "draft" }));
+    const out = await captureStdout(() =>
+        main(["--workspace", root, "run", "demo", "thing", "--message", "hi", "--allow-draft", "--json"])
+    );
+    const result = JSON.parse(out);
+    assert.equal(result.ok, true);
+});
+
+test("list --any-lifecycle includes drafts", async () => {
+    const root = await bootstrap();
+    await writeCap(root, basicCap({ lifecycleState: "draft" }));
+
+    const without = await captureStdout(() => main(["--workspace", root, "list"]));
+    assert.ok(!without.includes("global.demo.thing"), "draft should be hidden by default");
+
+    const withFlag = await captureStdout(() =>
+        main(["--workspace", root, "list", "--any-lifecycle"])
+    );
+    assert.ok(withFlag.includes("global.demo.thing"), "draft should appear with --any-lifecycle");
+});
+
+test("inspect resolves a workspace-local capability via shorthand", async () => {
+    const root = await bootstrap();
+    await writeCap(root, basicCap({
+        id: "workspace.repo.status",
+        scope: "workspace-local",
+        lifecycleState: "active"
+    }));
+    const out = await captureStdout(() =>
+        main(["--workspace", root, "inspect", "repo", "status", "--json"])
+    );
+    const parsed = JSON.parse(out);
+    assert.equal(parsed.capability.id, "workspace.repo.status");
+});
+
+test("promote --json emits a structured response", async () => {
+    const root = await bootstrap();
+    await writeCap(root, basicCap({ lifecycleState: "draft" }));
+    const out = await captureStdout(() =>
+        main(["--workspace", root, "promote", "global.demo.thing", "--to", "active", "--json"])
+    );
+    const parsed = JSON.parse(out);
+    assert.equal(parsed.ok, true);
+    assert.equal(parsed.lifecycleState, "active");
+    assert.equal(parsed.previousLifecycleState, "draft");
+    assert.equal(parsed.id, "global.demo.thing");
+    assert.match(parsed.manifestPath, /global\.demo\.thing\.json$/);
+});
+
+test("promote --json no-op response includes unchanged:true", async () => {
+    const root = await bootstrap();
+    await writeCap(root, basicCap({ lifecycleState: "active" }));
+    const out = await captureStdout(() =>
+        main(["--workspace", root, "promote", "global.demo.thing", "--to", "active", "--json"])
+    );
+    const parsed = JSON.parse(out);
+    assert.equal(parsed.unchanged, true);
+});
+
+test("promote refuses mounted capability ids", async () => {
+    const root = await bootstrap();
+    await writeCap(root, basicCap({ lifecycleState: "active" }));
+    await mkdir(path.join(root, "manifests", "toolspaces"), { recursive: true });
+    await writeFile(
+        path.join(root, "manifests", "toolspaces", "tly.mount.json"),
+        JSON.stringify({
+            manifestVersion: "ax/v0",
+            toolspace: "tly",
+            lifecycleState: "active",
+            moduleMounts: {
+                demo: { source: "global.demo", capabilities: ["thing"] }
+            }
+        })
+    );
+    await assert.rejects(
+        () => main(["--workspace", root, "promote", "toolspace.tly.demo.thing", "--to", "draft"]),
+        /unknown capability 'toolspace\.tly\.demo\.thing'/
+    );
+});
+
+test("doctor --json includes workspace block with viaMarker flag", async () => {
+    const root = await bootstrap();
+    const out = await captureStdout(() =>
+        main(["--workspace", root, "doctor", "--json"])
+    );
+    const parsed = JSON.parse(out);
+    assert.ok(parsed.workspace, "doctor JSON should include workspace block");
+    assert.equal(parsed.workspace.root, root);
+    assert.equal(parsed.workspace.viaMarker, true);
+    assert.equal(parsed.workspace.source, "explicit");
+});
+
+test("global wins over workspace-local when both define the same shorthand", async () => {
+    const root = await bootstrap();
+    await writeCap(root, basicCap({ id: "global.dup.thing", scope: "global", lifecycleState: "active" }));
+    await writeCap(root, basicCap({ id: "workspace.dup.thing", scope: "workspace-local", lifecycleState: "active" }));
+    const registry = await createRegistry({ rootDir: root });
+    const resolved = resolveCapability(registry, ["dup", "thing"], { args: { message: "x" } });
+    assert.equal(resolved.capability.id, "global.dup.thing");
+});
+
+test("mounted capability inherits source policies plus mount policies", async () => {
+    const root = await bootstrap();
+    await writeCap(root, basicCap({
+        id: "global.demo.thing",
+        lifecycleState: "active",
+        policies: ["require_workspace_binding"]
+    }));
+    await mkdir(path.join(root, "manifests", "toolspaces"), { recursive: true });
+    await writeFile(
+        path.join(root, "manifests", "toolspaces", "tly.mount.json"),
+        JSON.stringify({
+            manifestVersion: "ax/v0",
+            toolspace: "tly",
+            lifecycleState: "active",
+            moduleMounts: {
+                demo: {
+                    source: "global.demo",
+                    capabilities: ["thing"],
+                    policies: ["require_workspace_binding"]
+                }
+            }
+        })
+    );
+    const registry = await createRegistry({ rootDir: root });
+    const mounted = registry
+        .listMountedCapabilities()
+        .find((c) => c.id === "toolspace.tly.demo.thing");
+    assert.ok(mounted);
+    // Source policy + mount policy both present (will be deduped at evaluation time).
+    assert.equal(
+        mounted.policies.filter((p) => p === "require_workspace_binding").length,
+        2
+    );
+});

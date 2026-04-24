@@ -1,4 +1,5 @@
 {
+  "manifestVersion": "ax/v0",
   "id": "global.lex.frame.recall",
   "summary": "Recall frames from the global Lex store",
   "provider": "lex",
@@ -15,13 +16,13 @@
     }
   },
   "outputModes": ["json", "text"],
-  "sideEffects": "none",
+  "sideEffects": "read",
   "scope": "global",
   "lifecycleState": "active",
   "defaults": {},
   "policies": [],
   "owner": "module:lex",
   "examples": [
-    "ax lex frame recall --query recent --limit 5"
+    "ax run lex frame recall --query recent --limit 5"
   ]
 }

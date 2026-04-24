@@ -1,0 +1,32 @@
+{
+  "manifestVersion": "ax/v0",
+  "id": "global.majel.diff",
+  "summary": "Majel uncommitted changes summary (file count, insertions, deletions, file list).",
+  "provider": "majel",
+  "adapterType": "cli",
+  "providerAdapter": "majel",
+  "executionTarget": {
+    "command": "/srv/majel/bin/ax",
+    "args": ["diff"]
+  },
+  "argsSchema": {
+    "type": "object",
+    "properties": {
+      "staged": { "type": "boolean" },
+      "main": { "type": "boolean" }
+    },
+    "additionalProperties": false
+  },
+  "outputModes": ["json"],
+  "sideEffects": "read",
+  "scope": "global",
+  "lifecycleState": "active",
+  "defaults": {},
+  "policies": [],
+  "owner": "module:majel",
+  "examples": [
+    "ax run majel diff",
+    "ax run majel diff --staged",
+    "ax run majel diff --main"
+  ]
+}

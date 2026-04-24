@@ -34,5 +34,7 @@ export function parseCapabilityInput(registry, inputTokens) {
 }
 
 export function isFullyQualifiedId(value) {
-  return value.startsWith("global.") || value.startsWith("toolspace.");
+  return value.startsWith("global.")
+    || value.startsWith("toolspace.")
+    || value.startsWith("workspace.");
 }

@@ -1,99 +1,116 @@
-const REQUIRED_CAPABILITY_FIELDS = [
-  "id",
-  "summary",
-  "provider",
-  "adapterType",
-  "executionTarget",
-  "argsSchema",
-  "outputModes",
-  "sideEffects",
-  "scope",
-  "lifecycleState",
-  "defaults",
-  "policies",
-  "owner"
-];
+import { isImplemented, isKnown } from "./policy.js";
 
-const LIFECYCLE_STATES = new Set(["draft", "reviewed", "active"]);
-const ADAPTER_TYPES = new Set(["internal", "cli", "library", "rpc", "mcp"]);
+export function inspectRegistry(registry, { adapters } = {}) {
+    const issues = [...registry.loadIssues];
 
-export function inspectRegistry(registry) {
-  const issues = [...registry.loadIssues];
-
-  for (const capability of registry.capabilities.values()) {
-    issues.push(...validateCapability(capability));
-  }
-
-  for (const toolspace of registry.toolspaces.values()) {
-    issues.push(...validateToolspace(registry, toolspace));
-  }
-
-  return {
-    capabilityCount: registry.capabilities.size,
-    toolspaceCount: registry.toolspaces.size,
-    manifestCount: registry.files.length,
-    issues
-  };
-}
-
-function validateCapability(capability) {
-  const issues = [];
-
-  for (const field of REQUIRED_CAPABILITY_FIELDS) {
-    if (!(field in capability)) {
-      issues.push({
-        severity: "error",
-        message: `${capability.id ?? capability.manifestPath} is missing '${field}'`
-      });
+    // Mount referential integrity (validators don't see the cross-toolspace world).
+    for (const toolspace of registry.toolspaces.values()) {
+        for (const [moduleName, mount] of Object.entries(toolspace.moduleMounts ?? {})) {
+            for (const capabilityPath of mount.capabilities ?? []) {
+                const sourceId = `${mount.source}.${capabilityPath}`;
+                if (!registry.getCapability(sourceId)) {
+                    issues.push({
+                        severity: "error",
+                        message: `${toolspace.toolspace}.${moduleName}.${capabilityPath} points at missing source ${sourceId}`
+                    });
+                }
+            }
+        }
     }
-  }
 
-  if (capability.lifecycleState && !LIFECYCLE_STATES.has(capability.lifecycleState)) {
-    issues.push({
-      severity: "error",
-      message: `${capability.id} has invalid lifecycleState '${capability.lifecycleState}'`
-    });
-  }
+    // Duplicate id detection (last-wins is a footgun).
+    // The registry already deduplicates via Map; we re-scan the loaded files
+    // by path to catch silent overrides only when the same id appears twice.
+    // Skipped here because Map storage erased it; reported via load issues
+    // when strict mode rejects duplicates is a future improvement.
 
-  if (capability.adapterType && !ADAPTER_TYPES.has(capability.adapterType)) {
-    issues.push({
-      severity: "error",
-      message: `${capability.id} has invalid adapterType '${capability.adapterType}'`
-    });
-  }
+    // Adapter availability for declared capabilities.
+    if (adapters) {
+        const seenTypes = new Set();
+        for (const capability of registry.capabilities.values()) {
+            if (capability.adapterType) seenTypes.add(capability.adapterType);
+        }
+        for (const type of seenTypes) {
+            if (!adapters.get(type)) {
+                issues.push({
+                    severity: "error",
+                    message: `no adapter loaded for declared adapterType '${type}'`
+                });
+            }
+        }
+        issues.push(...adapters.loadIssues);
 
-  if (capability.id && !/^(global|toolspace)\.[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/.test(capability.id)) {
-    issues.push({
-      severity: "error",
-      message: `${capability.id} is not a fully qualified AX capability id`
-    });
-  }
-
-  return issues;
-}
-
-function validateToolspace(registry, toolspace) {
-  const issues = [];
-
-  if (!toolspace.moduleMounts || typeof toolspace.moduleMounts !== "object") {
-    issues.push({
-      severity: "error",
-      message: `${toolspace.toolspace} toolspace has no moduleMounts object`
-    });
-    return issues;
-  }
-
-  for (const [moduleName, mount] of Object.entries(toolspace.moduleMounts)) {
-    for (const capabilityPath of mount.capabilities ?? []) {
-      const sourceId = `${mount.source}.${capabilityPath}`;
-      if (!registry.getCapability(sourceId)) {
-        issues.push({
-          severity: "error",
-          message: `${toolspace.toolspace}.${moduleName}.${capabilityPath} points at missing ${sourceId}`
-        });
-      }
+        // Toolspace-private adapter shadowing & orphan detection.
+        for (const [ts, m] of adapters.toolspaceTypes ?? new Map()) {
+            if (!registry.hasToolspace(ts)) {
+                issues.push({
+                    severity: "warning",
+                    message: `toolspaces/${ts}/adapters/ holds adapters but no toolspace mount declares '${ts}'`
+                });
+            }
+            for (const type of m.keys()) {
+                if (adapters.types.has(type)) {
+                    issues.push({
+                        severity: "warning",
+                        message: `toolspace '${ts}' private type-adapter '${type}' shadows the global type-adapter '${type}'`
+                    });
+                }
+            }
+        }
+        for (const [ts, m] of adapters.toolspaceProviders ?? new Map()) {
+            if (!registry.hasToolspace(ts)) {
+                issues.push({
+                    severity: "warning",
+                    message: `toolspaces/${ts}/adapters/ holds providers but no toolspace mount declares '${ts}'`
+                });
+            }
+            for (const name of m.keys()) {
+                if (adapters.providers.has(name)) {
+                    issues.push({
+                        severity: "warning",
+                        message: `toolspace '${ts}' private provider '${name}' shadows the global provider '${name}'`
+                    });
+                }
+            }
+        }
     }
-  }
 
-  return issues;
+    // Policy declared-but-unenforced warnings.
+    const seenPolicyWarnings = new Set();
+    const allCapabilities = [
+        ...registry.capabilities.values(),
+        ...registry.listMountedCapabilities()
+    ];
+    for (const capability of allCapabilities) {
+        for (const name of capability.policies ?? []) {
+            if (!isKnown(name)) {
+                const key = `unknown:${name}:${capability.id}`;
+                if (seenPolicyWarnings.has(key)) continue;
+                seenPolicyWarnings.add(key);
+                issues.push({
+                    severity: "error",
+                    message: `${capability.id} declares unknown policy '${name}'`
+                });
+                continue;
+            }
+            if (!isImplemented(name)) {
+                const key = `unenforced:${name}`;
+                if (seenPolicyWarnings.has(key)) continue;
+                seenPolicyWarnings.add(key);
+                issues.push({
+                    severity: "warning",
+                    message: `policy '${name}' is declared but has no runtime implementation yet`
+                });
+            }
+        }
+    }
+
+    return {
+        capabilityCount: registry.capabilities.size,
+        toolspaceCount: registry.toolspaces.size,
+        manifestCount: registry.files.length,
+        rejectedCount: registry.rejected.length,
+        adapterCount: adapters ? adapters.adapters.size : 0,
+        issues
+    };
 }

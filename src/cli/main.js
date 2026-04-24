@@ -1,246 +1,581 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 import path from "node:path";
 import { createRegistry } from "../core/registry.js";
 import { resolveCapability } from "../core/resolver.js";
 import { executeResolvedCapability } from "../core/executor.js";
 import { inspectRegistry } from "../core/doctor.js";
+import { loadAdapters } from "../core/adapter-loader.js";
+import { findWorkspaceRoot } from "../core/workspace.js";
 import { parseOptionTokens, splitCommandTokens } from "./options.js";
 import { AxError } from "../core/errors.js";
 
-const COMMANDS = new Set(["list", "inspect", "run", "init", "doctor", "help"]);
+const COMMANDS = new Set(["list", "inspect", "run", "init", "doctor", "promote", "demote", "help"]);
 
 export async function main(argv, env = {}) {
-  const cwd = env.cwd ?? process.cwd();
-  const [command = "help", ...rest] = argv;
+    const cwd = env.cwd ?? process.cwd();
+    const processEnv = env.env ?? process.env;
 
-  if (command === "help" || command === "--help" || command === "-h") {
-    printHelp();
-    return;
-  }
+    // Pull --workspace out of argv before command dispatch so every
+    // subcommand gets workspace resolution for free.
+    const { argv: rest1, workspace } = extractWorkspaceFlag(argv);
+    const ws = findWorkspaceRoot({
+        cwd,
+        env: processEnv,
+        explicit: workspace
+    });
+    const rootDir = ws.root;
 
-  if (!COMMANDS.has(command)) {
-    throw new AxError(`unknown command '${command}'. Run 'ax help'.`, 2);
-  }
+    const [command = "help", ...rest] = rest1;
 
-  const registry = await createRegistry({ rootDir: cwd });
+    if (command === "help" || command === "--help" || command === "-h") {
+        printHelp();
+        return;
+    }
 
-  if (command === "list") {
-    await listCommand(registry, rest);
-    return;
-  }
+    if (!COMMANDS.has(command)) {
+        throw new AxError(`unknown command '${command}'. Run 'ax help'.`, 2);
+    }
 
-  if (command === "inspect") {
-    await inspectCommand(registry, rest);
-    return;
-  }
+    if (command === "init") {
+        await initCommand(rootDir, rest);
+        return;
+    }
 
-  if (command === "run") {
-    await runCommand(registry, rest);
-    return;
-  }
+    const registry = await createRegistry({ rootDir });
 
-  if (command === "init") {
-    await initCommand(cwd, rest);
-    return;
-  }
+    if (command === "list") {
+        await listCommand(registry, rest);
+        return;
+    }
+    if (command === "inspect") {
+        await inspectCommand(registry, rest);
+        return;
+    }
+    if (command === "run") {
+        const adapters = await loadAdapters({ rootDir });
+        await runCommand(registry, adapters, rest, ws);
+        return;
+    }
+    if (command === "promote") {
+        await promoteCommand(registry, rest);
+        return;
+    }
+    if (command === "demote") {
+        await demoteCommand(registry, rest);
+        return;
+    }
+    if (command === "doctor") {
+        const adapters = await loadAdapters({ rootDir });
+        await doctorCommand(registry, adapters, rest, ws);
+    }
+}
 
-  if (command === "doctor") {
-    await doctorCommand(registry, rest);
-  }
+// Extract `--workspace <path>` or `--workspace=<path>` from argv before
+// command dispatch. Other flags pass through untouched.
+function extractWorkspaceFlag(argv) {
+    const out = [];
+    let workspace = null;
+    for (let i = 0; i < argv.length; i += 1) {
+        const token = argv[i];
+        if (token === "--workspace") {
+            workspace = argv[i + 1];
+            i += 1;
+            continue;
+        }
+        if (token.startsWith("--workspace=")) {
+            workspace = token.slice("--workspace=".length);
+            continue;
+        }
+        out.push(token);
+    }
+    return { argv: out, workspace };
 }
 
 async function listCommand(registry, tokens) {
-  const parsed = parseOptionTokens(tokens);
-  const includeDrafts = Boolean(parsed.options.all ?? parsed.options["include-drafts"]);
-  const capabilities = registry.listCapabilities({ includeDrafts });
+    const parsed = parseOptionTokens(tokens);
+    warnIfDeprecatedAllowDraft(parsed.options);
+    const includeDrafts = Boolean(
+        parsed.options.all
+        ?? parsed.options["any-lifecycle"]
+        ?? parsed.options["include-drafts"]
+        ?? parsed.options["allow-draft"]
+    );
+    const capabilities = registry.listCapabilities({ includeDrafts });
 
-  if (parsed.options.json) {
-    printJson({ capabilities });
-    return;
-  }
+    if (parsed.options.json) {
+        printJson({ capabilities });
+        return;
+    }
 
-  for (const capability of capabilities) {
-    const source = capability.sourceCapabilityId
-      ? ` -> ${capability.sourceCapabilityId}`
-      : "";
-    console.log(`${capability.id} [${capability.lifecycleState}]${source}`);
-  }
+    for (const capability of capabilities) {
+        const source = capability.sourceCapabilityId
+            ? ` -> ${capability.sourceCapabilityId}`
+            : "";
+        console.log(`${capability.id} [${capability.lifecycleState}]${source}`);
+    }
 }
 
 async function inspectCommand(registry, tokens) {
-  const { pathTokens, options } = splitCommandTokens(tokens);
-  if (pathTokens.length === 0) {
-    throw new AxError("inspect requires a capability id or CLI path", 2);
-  }
+    const { pathTokens, options } = splitCommandTokens(tokens);
+    if (pathTokens.length === 0) {
+        throw new AxError("inspect requires a capability id or CLI path", 2);
+    }
 
-  const resolved = registry.resolveInspectable(pathTokens);
+    const resolved = registry.resolveInspectable(pathTokens);
 
-  if (options.json) {
-    printJson(resolved);
-    return;
-  }
+    if (options.json) {
+        printJson(resolved);
+        return;
+    }
 
-  console.log(`${resolved.capability.id}`);
-  console.log(`summary: ${resolved.capability.summary}`);
-  console.log(`scope: ${resolved.capability.scope}`);
-  console.log(`lifecycle: ${resolved.capability.lifecycleState}`);
-  console.log(`adapter: ${resolved.capability.adapterType}`);
-  if (resolved.capability.sourceCapabilityId) {
-    console.log(`source: ${resolved.capability.sourceCapabilityId}`);
-  }
-  if (Object.keys(resolved.injectedDefaults).length > 0) {
-    console.log(`defaults: ${JSON.stringify(resolved.injectedDefaults)}`);
-  }
+    const cap = resolved.capability;
+    console.log(`${cap.id}`);
+    console.log(`summary: ${cap.summary}`);
+    console.log(`scope: ${cap.scope}`);
+    console.log(`lifecycle: ${cap.lifecycleState}`);
+    console.log(`adapter: ${cap.adapterType}`);
+    if (cap.providerAdapter) {
+        console.log(`provider: ${cap.providerAdapter}`);
+    }
+    if (cap.sourceCapabilityId) {
+        console.log(`source: ${cap.sourceCapabilityId}`);
+    }
+    if (cap.policies?.length > 0) {
+        console.log(`policies: ${cap.policies.join(", ")}`);
+    }
+    if (resolved.injectedDefaults && Object.keys(resolved.injectedDefaults).length > 0) {
+        console.log(`defaults: ${JSON.stringify(resolved.injectedDefaults)}`);
+    }
 }
 
-async function runCommand(registry, tokens) {
-  const { pathTokens, options } = splitCommandTokens(tokens);
-  if (pathTokens.length === 0) {
-    throw new AxError("run requires a capability id or CLI path", 2);
-  }
-
-  const resolved = resolveCapability(registry, pathTokens, {
-    args: options,
-    allowDraft: Boolean(options["allow-draft"])
-  });
-  const result = await executeResolvedCapability(resolved);
-
-  if (options.json) {
-    printJson(result);
-    return;
-  }
-
-  if (result.ok) {
-    if (typeof result.data === "string") {
-      console.log(result.data);
-    } else {
-      console.log(JSON.stringify(result.data, null, 2));
+async function runCommand(registry, adapters, tokens, ws = null) {
+    const { pathTokens, options } = splitCommandTokens(tokens);
+    if (pathTokens.length === 0) {
+        throw new AxError("run requires a capability id or CLI path", 2);
     }
-    return;
-  }
+    warnIfDeprecatedAllowDraft(options);
 
-  throw new AxError(result.error?.message ?? "capability execution failed", 1);
+    const resolved = resolveCapability(registry, pathTokens, {
+        args: options,
+        allowDraft: Boolean(options["any-lifecycle"] ?? options["allow-draft"])
+    });
+    const runtime = ws
+        ? { workspace: { root: ws.root, viaMarker: ws.viaMarker, source: ws.source } }
+        : null;
+    const result = await executeResolvedCapability(resolved, { adapters, runtime });
+
+    if (options.json) {
+        printJson(result);
+        return;
+    }
+
+    if (result.ok) {
+        if (typeof result.data === "string") {
+            console.log(result.data);
+        } else {
+            console.log(JSON.stringify(result.data, null, 2));
+        }
+        return;
+    }
+
+    throw new AxError(result.error?.message ?? "capability execution failed", 1);
 }
 
 async function initCommand(rootDir, tokens) {
-  const [kind, nameOrId] = tokens;
-  if (!kind || !nameOrId) {
-    throw new AxError("init requires 'toolspace <name>' or 'capability <id>'", 2);
-  }
+    const [kind, ...args] = tokens;
+    if (!kind || args.length === 0) {
+        throw new AxError(
+            "init requires 'toolspace <name>', 'capability <id>', or 'adapter <type|name>'",
+            2
+        );
+    }
 
-  if (kind === "toolspace") {
-    await initToolspace(rootDir, nameOrId);
-    return;
-  }
+    if (kind === "toolspace") {
+        await initToolspace(rootDir, args[0]);
+        return;
+    }
+    if (kind === "capability") {
+        await initCapability(rootDir, args[0]);
+        return;
+    }
+    if (kind === "adapter") {
+        await initAdapter(rootDir, args);
+        return;
+    }
 
-  if (kind === "capability") {
-    await initCapability(rootDir, nameOrId);
-    return;
-  }
-
-  throw new AxError(`unknown init kind '${kind}'`, 2);
+    throw new AxError(`unknown init kind '${kind}'`, 2);
 }
 
 async function initToolspace(rootDir, name) {
-  assertSafeName(name, "toolspace");
-  const filePath = path.join(rootDir, "manifests", "toolspaces", `${name}.mount.json`);
-  const manifest = {
-    toolspace: name,
-    lifecycleState: "draft",
-    moduleMounts: {}
-  };
-  await writeJsonFile(filePath, manifest);
-  console.log(`created draft toolspace mount: ${path.relative(rootDir, filePath)}`);
+    assertSafeName(name, "toolspace");
+    const filePath = path.join(rootDir, "manifests", "toolspaces", `${name}.mount.json`);
+    const manifest = {
+        manifestVersion: "ax/v0",
+        toolspace: name,
+        lifecycleState: "draft",
+        moduleMounts: {}
+    };
+    await writeJsonFile(filePath, manifest);
+    console.log(`created draft toolspace mount: ${path.relative(rootDir, filePath)}`);
 }
 
 async function initCapability(rootDir, id) {
-  assertCapabilityId(id);
-  const fileName = `${id}.json`;
-  const filePath = path.join(rootDir, "manifests", "capabilities", fileName);
-  const manifest = {
-    id,
-    summary: "Draft AX capability",
-    provider: "draft",
-    adapterType: "internal",
-    executionTarget: {
-      handler: "draft.todo"
-    },
-    argsSchema: {
-      type: "object",
-      properties: {}
-    },
-    outputModes: ["json"],
-    sideEffects: "unknown",
-    scope: id.startsWith("global.") ? "global" : "toolspace-local",
-    lifecycleState: "draft",
-    defaults: {},
-    policies: [],
-    owner: "draft"
-  };
-  await writeJsonFile(filePath, manifest);
-  console.log(`created draft capability: ${path.relative(rootDir, filePath)}`);
+    assertCapabilityId(id);
+    const filePath = path.join(rootDir, "manifests", "capabilities", `${id}.json`);
+    const prefix = id.split(".")[0];
+    const scope =
+        prefix === "global" ? "global"
+            : prefix === "workspace" ? "workspace-local"
+                : "toolspace-local";
+    const manifest = {
+        manifestVersion: "ax/v0",
+        id,
+        summary: "Draft AX capability",
+        provider: "draft",
+        adapterType: "internal",
+        executionTarget: { handler: "draft.todo" },
+        argsSchema: { type: "object", properties: {} },
+        outputModes: ["json"],
+        sideEffects: "unknown",
+        scope,
+        lifecycleState: "draft",
+        defaults: {},
+        policies: [],
+        owner: "draft"
+    };
+    await writeJsonFile(filePath, manifest);
+    console.log(`created draft capability: ${path.relative(rootDir, filePath)}`);
 }
 
-async function doctorCommand(registry, tokens) {
-  const parsed = parseOptionTokens(tokens);
-  const report = inspectRegistry(registry);
+// init adapter <type>                                  -> draft global type-adapter under adapters/<type>/
+// init adapter --kind provider <name>                  -> draft global provider adapter under adapters/<name>/
+// init adapter --toolspace <ts> [--kind provider] <n>  -> draft toolspace-private adapter under toolspaces/<ts>/adapters/<n>/
+async function initAdapter(rootDir, args) {
+    const parsed = parseOptionTokens(args);
+    const kind = parsed.options.kind ?? "type-adapter";
+    const toolspace = parsed.options.toolspace ?? null;
+    const name = parsed.positionals[0];
+    if (!name) {
+        throw new AxError("init adapter requires a name", 2);
+    }
+    assertSafeName(name, "adapter");
+    if (toolspace) assertSafeName(toolspace, "toolspace");
 
-  if (parsed.options.json) {
-    printJson(report);
-    return;
-  }
+    if (kind === "type-adapter") {
+        await scaffoldTypeAdapter(rootDir, name, { toolspace });
+        return;
+    }
+    if (kind === "provider") {
+        const composes = parsed.options.composes ?? "cli";
+        await scaffoldProviderAdapter(rootDir, name, composes, { toolspace });
+        return;
+    }
+    throw new AxError(`unknown adapter kind '${kind}'`, 2);
+}
 
-  console.log(`capabilities: ${report.capabilityCount}`);
-  console.log(`toolspaces: ${report.toolspaceCount}`);
+function adapterRoot(rootDir, { toolspace }) {
+    return toolspace
+        ? path.join(rootDir, "toolspaces", toolspace, "adapters")
+        : path.join(rootDir, "adapters");
+}
 
-  if (report.issues.length === 0) {
-    console.log("issues: none");
-    return;
-  }
+async function scaffoldTypeAdapter(rootDir, type, { toolspace = null } = {}) {
+    const dir = path.join(adapterRoot(rootDir, { toolspace }), type);
+    const manifest = {
+        manifestVersion: "ax/v0",
+        kind: "type-adapter",
+        type,
+        summary: `Draft AX type adapter for ${type} execution`,
+        entry: "index.js",
+        supportedExecutionTargets: [],
+        lifecycleState: "draft",
+        owner: "draft"
+    };
+    const indexJs = `// Draft AX type adapter for '${type}'.
+// Implement execute(resolved) to run a resolved capability and return
+// a normalized result: { ok, data | error, meta }.
+// See docs/04-adapter-contract.md and docs/08-adapter-folder-shape.md.
 
-  console.log("issues:");
-  for (const issue of report.issues) {
-    console.log(`- ${issue.severity}: ${issue.message}`);
-  }
+import { AxError } from "../../src/core/errors.js";
+
+export async function execute(resolved) {
+  throw new AxError(
+    \`draft type-adapter '${type}' has no implementation for capability '\${resolved.capability.id}'\`,
+    1
+  );
+}
+`;
+    await writeJsonFile(path.join(dir, "adapter.manifest.json"), manifest);
+    await mkdir(path.join(dir, "test"), { recursive: true });
+    await writeFile(path.join(dir, "index.js"), indexJs, { flag: "wx" });
+    const tsTag = toolspace ? `  (toolspace-private: ${toolspace})` : "";
+    console.log(`created draft type-adapter: ${path.relative(rootDir, dir)}/${tsTag}`);
+}
+
+async function scaffoldProviderAdapter(rootDir, name, composes, { toolspace = null } = {}) {
+    const dir = path.join(adapterRoot(rootDir, { toolspace }), name);
+    const manifest = {
+        manifestVersion: "ax/v0",
+        kind: "provider",
+        name,
+        composes,
+        summary: `Draft AX provider adapter for ${name} (composes ${composes})`,
+        entry: "index.js",
+        lifecycleState: "draft",
+        owner: "draft"
+    };
+    const indexJs = `// Draft AX provider adapter '${name}'.
+// Provider adapters wrap a type adapter and normalize a provider's
+// quirks (e.g. envelope shape, error conventions). The framework calls
+// execute(resolved, ctx) when a capability declares
+// "providerAdapter": "${name}".
+//
+// ctx.types       -> AdapterRegistry (full registry, advanced use)
+// ctx.typeAdapter -> the resolved type adapter (composes target)
+//
+// The simplest provider just delegates and post-processes:
+//
+//   const result = await ctx.typeAdapter.execute(resolved);
+//   // ...inspect/transform result.data here...
+//   return result;
+//
+// See docs/04-adapter-contract.md.
+
+export async function execute(resolved, ctx) {
+  const result = await ctx.typeAdapter.execute(resolved);
+  return result;
+}
+`;
+    await writeJsonFile(path.join(dir, "adapter.manifest.json"), manifest);
+    await mkdir(path.join(dir, "test"), { recursive: true });
+    await writeFile(path.join(dir, "index.js"), indexJs, { flag: "wx" });
+    const tsTag = toolspace ? `  (toolspace-private: ${toolspace})` : "";
+    console.log(
+        `created draft provider adapter: ${path.relative(rootDir, dir)}/  (composes ${composes})${tsTag}`
+    );
+}
+
+async function doctorCommand(registry, adapters, tokens, ws = null) {
+    const parsed = parseOptionTokens(tokens);
+    const report = inspectRegistry(registry, { adapters });
+    if (ws) {
+        report.workspace = {
+            root: ws.root,
+            viaMarker: ws.viaMarker,
+            source: ws.source
+        };
+    }
+
+    if (parsed.options.json) {
+        printJson(report);
+        return;
+    }
+
+    console.log(`workspace: ${registry.rootDir}${ws && !ws.viaMarker ? " (no marker; cwd fallback)" : ""}`);
+    console.log(`capabilities: ${report.capabilityCount}`);
+    console.log(`toolspaces: ${report.toolspaceCount}`);
+    console.log(`adapters: ${report.adapterCount}`);
+    if (report.rejectedCount > 0) {
+        console.log(`rejected manifests (strict mode): ${report.rejectedCount}`);
+    }
+
+    if (report.issues.length === 0) {
+        console.log("issues: none");
+        return;
+    }
+
+    console.log("issues:");
+    for (const issue of report.issues) {
+        console.log(`- ${issue.severity}: ${issue.message}`);
+    }
+
+    const hasError = report.issues.some((i) => i.severity === "error");
+    if (hasError) {
+        throw new AxError("doctor found errors", 1);
+    }
 }
 
 function printHelp() {
-  console.log(`AX framework prototype
+    console.log(`AX framework prototype
+
+Global flags:
+  --workspace <path>     Workspace root (overrides marker-file lookup and AX_WORKSPACE).
 
 Usage:
-  ax list [--all] [--json]
+  ax list [--all|--any-lifecycle] [--json]
   ax inspect <id-or-path> [--json]
-  ax run <id-or-path> [--key value] [--json]
+  ax run <id-or-path> [--key value] [--json] [--any-lifecycle]
   ax init toolspace <name>
-  ax init capability <fully-qualified-id>
+  ax init capability <fully-qualified-id>      (global.* | workspace.* | toolspace.*)
+  ax init adapter <type>
+  ax init adapter --kind provider <name> [--composes <type>]
+  ax init adapter --toolspace <ts> <type>
+  ax init adapter --toolspace <ts> --kind provider <name> [--composes <type>]
+  ax promote <id> --to <draft|reviewed|active> [--json]
+  ax demote <id> --to <draft|reviewed> [--json]
   ax doctor [--json]
+
+Lifecycle flag:
+  --any-lifecycle        Allow non-active capabilities to run/list (canonical).
+  --allow-draft          Deprecated alias for --any-lifecycle (warns to stderr).
 
 Examples:
   ax list
   ax inspect echo say
-  ax inspect toy echo say
+  ax inspect lex recall
   ax run echo say --message hello
   ax run toy echo say --message hello
+  ax run lex recall --query "recent work"
+  ax run majel status
+  ax run workspace.repo.status
+  ax init adapter --kind provider acme --composes cli
+  ax promote global.acme.status --to active
 `);
 }
 
 function assertSafeName(name, label) {
-  if (!/^[a-z][a-z0-9-]*$/.test(name)) {
-    throw new AxError(`${label} name must match /^[a-z][a-z0-9-]*$/`, 2);
-  }
+    if (!/^[a-z][a-z0-9-]*$/.test(name)) {
+        throw new AxError(`${label} name must match /^[a-z][a-z0-9-]*$/`, 2);
+    }
 }
 
 function assertCapabilityId(id) {
-  if (!/^(global|toolspace)\.[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/.test(id)) {
-    throw new AxError("capability id must be fully qualified, e.g. global.echo.say", 2);
-  }
+    if (!/^(global|toolspace|workspace)\.[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*)+$/.test(id)) {
+        throw new AxError(
+            "capability id must be fully qualified, e.g. global.echo.say or workspace.repo.status",
+            2
+        );
+    }
+}
+
+// `ax promote <id> --to <state>` rewrites the capability manifest's
+// lifecycleState in place. The whole manifest is re-validated after the
+// edit; any validation error blocks the write.
+async function promoteCommand(registry, tokens) {
+    const parsed = parseOptionTokens(tokens);
+    const [id] = parsed.positionals;
+    const target = parsed.options.to;
+    if (!id || !target) {
+        throw new AxError("promote requires '<id> --to <state>' (state in draft|reviewed|active)", 2);
+    }
+    if (!["draft", "reviewed", "active"].includes(target)) {
+        throw new AxError(`unknown lifecycleState '${target}' (expected draft|reviewed|active)`, 2);
+    }
+    const capability = registry.getCapability(id);
+    if (!capability) {
+        throw new AxError(`unknown capability '${id}' (mounted capabilities cannot be promoted; promote the source instead)`, 2);
+    }
+    if (!capability.manifestPath) {
+        throw new AxError(`capability '${id}' has no manifestPath; cannot promote`, 1);
+    }
+    const filePath = path.join(registry.rootDir, capability.manifestPath);
+    const raw = JSON.parse(await readFile(filePath, "utf8"));
+    const previous = raw.lifecycleState;
+    if (previous === target) {
+        if (parsed.options.json) {
+            printJson({ ok: true, id, lifecycleState: target, unchanged: true, manifestPath: capability.manifestPath });
+        } else {
+            console.log(`${id}: already ${target}`);
+        }
+        return;
+    }
+    raw.lifecycleState = target;
+
+    // Re-validate the edited manifest before writing.
+    const { validateCapabilityManifest } = await import("../core/manifest-validator.js");
+    const issues = validateCapabilityManifest(raw, capability.manifestPath);
+    const errors = issues.filter((i) => i.severity === "error");
+    if (errors.length > 0) {
+        throw new AxError(
+            `promote refused: post-edit manifest invalid: ${errors.map((e) => e.message).join("; ")}`,
+            2
+        );
+    }
+
+    await writeFile(filePath, `${JSON.stringify(raw, null, 2)}\n`);
+    if (parsed.options.json) {
+        printJson({ ok: true, id, lifecycleState: target, previousLifecycleState: previous, manifestPath: capability.manifestPath });
+    } else {
+        console.log(`${id}: ${previous} -> ${target}  (${capability.manifestPath})`);
+    }
+}
+
+// `ax demote <id> --to <state>` is the symmetric inverse of promote.
+// It enforces that the target state is *earlier* in the lifecycle than
+// the current state, so an agent that means to walk a capability back
+// can do so without holding a regression-shaped promote in its head.
+const LIFECYCLE_ORDER = { draft: 0, reviewed: 1, active: 2 };
+
+async function demoteCommand(registry, tokens) {
+    const parsed = parseOptionTokens(tokens);
+    const [id] = parsed.positionals;
+    const target = parsed.options.to;
+    if (!id || !target) {
+        throw new AxError("demote requires '<id> --to <state>' (state in draft|reviewed)", 2);
+    }
+    if (!(target in LIFECYCLE_ORDER)) {
+        throw new AxError(`unknown lifecycleState '${target}' (expected draft|reviewed|active)`, 2);
+    }
+    const capability = registry.getCapability(id);
+    if (!capability) {
+        throw new AxError(`unknown capability '${id}' (mounted capabilities cannot be demoted; demote the source instead)`, 2);
+    }
+    if (LIFECYCLE_ORDER[target] >= LIFECYCLE_ORDER[capability.lifecycleState]) {
+        throw new AxError(
+            `demote refused: '${id}' is '${capability.lifecycleState}' and target '${target}' is not earlier in the lifecycle (use 'ax promote' to advance)`,
+            2
+        );
+    }
+    // Demote shares the same edit + revalidate path as promote.
+    await rewriteLifecycleState(registry, capability, id, target, parsed.options.json);
+}
+
+async function rewriteLifecycleState(registry, capability, id, target, asJson) {
+    if (!capability.manifestPath) {
+        throw new AxError(`capability '${id}' has no manifestPath; cannot rewrite lifecycle`, 1);
+    }
+    const filePath = path.join(registry.rootDir, capability.manifestPath);
+    const raw = JSON.parse(await readFile(filePath, "utf8"));
+    const previous = raw.lifecycleState;
+    raw.lifecycleState = target;
+
+    const { validateCapabilityManifest } = await import("../core/manifest-validator.js");
+    const issues = validateCapabilityManifest(raw, capability.manifestPath);
+    const errors = issues.filter((i) => i.severity === "error");
+    if (errors.length > 0) {
+        throw new AxError(
+            `lifecycle rewrite refused: post-edit manifest invalid: ${errors.map((e) => e.message).join("; ")}`,
+            2
+        );
+    }
+
+    await writeFile(filePath, `${JSON.stringify(raw, null, 2)}\n`);
+    if (asJson) {
+        printJson({ ok: true, id, lifecycleState: target, previousLifecycleState: previous, manifestPath: capability.manifestPath });
+    } else {
+        console.log(`${id}: ${previous} -> ${target}  (${capability.manifestPath})`);
+    }
+}
+
+// Emit a one-line stderr deprecation warning when --allow-draft is
+// used. The flag still works (it remains an alias for --any-lifecycle)
+// but agents are nudged toward the canonical name.
+let _warnedAllowDraft = false;
+function warnIfDeprecatedAllowDraft(options) {
+    if (_warnedAllowDraft) return;
+    if (options && Object.prototype.hasOwnProperty.call(options, "allow-draft")) {
+        process.stderr.write(
+            "ax: warning: --allow-draft is deprecated; use --any-lifecycle (will be removed in v0.1)\n"
+        );
+        _warnedAllowDraft = true;
+    }
 }
 
 async function writeJsonFile(filePath, data) {
-  await mkdir(path.dirname(filePath), { recursive: true });
-  await writeFile(filePath, `${JSON.stringify(data, null, 2)}\n`, { flag: "wx" });
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await writeFile(filePath, `${JSON.stringify(data, null, 2)}\n`, { flag: "wx" });
 }
 
 function printJson(value) {
-  console.log(JSON.stringify(value, null, 2));
+    console.log(JSON.stringify(value, null, 2));
 }

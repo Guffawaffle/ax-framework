@@ -1,0 +1,10 @@
+{
+  "manifestVersion": "ax/v0",
+  "kind": "provider",
+  "name": "majel",
+  "composes": "cli",
+  "summary": "Majel Ax Router provider. Wraps the cli type-adapter and unwraps Majel's {command, success, durationMs, data, errors?, hints?} envelope into AX's normalized result shape.",
+  "entry": "index.js",
+  "lifecycleState": "reviewed",
+  "owner": "module:majel"
+}

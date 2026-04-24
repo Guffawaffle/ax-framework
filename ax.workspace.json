@@ -1,0 +1,5 @@
+{
+  "manifestVersion": "ax/v0",
+  "name": "ax",
+  "summary": "AX framework reference workspace. Holds the built-in adapters, example capabilities, and the Lex + Majel provider proofs."
+}

@@ -1,57 +1,123 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { createRegistry } from "../src/core/registry.js";
 import { resolveCapability } from "../src/core/resolver.js";
 import { executeResolvedCapability } from "../src/core/executor.js";
+import { loadAdapters } from "../src/core/adapter-loader.js";
 
 const rootDir = new URL("..", import.meta.url).pathname;
 
-test("resolves a global capability path to an explicit global id", async () => {
-  const registry = await createRegistry({ rootDir });
-  const resolved = resolveCapability(registry, ["echo", "say"], {
-    args: { message: "hello" }
-  });
+async function ctx() {
+    const registry = await createRegistry({ rootDir });
+    const adapters = await loadAdapters({ rootDir });
+    return { registry, adapters };
+}
 
-  assert.equal(resolved.capability.id, "global.echo.say");
-  assert.equal(resolved.capability.scope, "global");
-  assert.deepEqual(resolved.args, { message: "hello" });
+test("resolves a global capability path to an explicit global id", async () => {
+    const { registry } = await ctx();
+    const resolved = resolveCapability(registry, ["echo", "say"], {
+        args: { message: "hello" }
+    });
+
+    assert.equal(resolved.capability.id, "global.echo.say");
+    assert.equal(resolved.capability.scope, "global");
+    assert.deepEqual(resolved.args, { message: "hello" });
 });
 
 test("resolves a mounted capability without flattening it into the global id", async () => {
-  const registry = await createRegistry({ rootDir });
-  const resolved = resolveCapability(registry, ["toy", "echo", "say"], {
-    args: { message: "hello" }
-  });
+    const { registry } = await ctx();
+    const resolved = resolveCapability(registry, ["toy", "echo", "say"], {
+        args: { message: "hello" }
+    });
 
-  assert.equal(resolved.capability.id, "toolspace.toy.echo.say");
-  assert.equal(resolved.capability.sourceCapabilityId, "global.echo.say");
-  assert.equal(resolved.capability.scope, "toolspace-local");
-  assert.deepEqual(resolved.args, { prefix: "toy", message: "hello" });
+    assert.equal(resolved.capability.id, "toolspace.toy.echo.say");
+    assert.equal(resolved.capability.sourceCapabilityId, "global.echo.say");
+    assert.equal(resolved.capability.scope, "toolspace-local");
+    assert.deepEqual(resolved.args, { prefix: "toy", message: "hello" });
 });
 
 test("executes an internal global capability", async () => {
-  const registry = await createRegistry({ rootDir });
-  const resolved = resolveCapability(registry, ["echo", "say"], {
-    args: { message: "hello" }
-  });
+    const { registry, adapters } = await ctx();
+    const resolved = resolveCapability(registry, ["echo", "say"], {
+        args: { message: "hello" }
+    });
+    const result = await executeResolvedCapability(resolved, { adapters });
 
-  const result = await executeResolvedCapability(resolved);
-
-  assert.equal(result.ok, true);
-  assert.equal(result.data, "hello");
-  assert.equal(result.meta.capabilityId, "global.echo.say");
+    assert.equal(result.ok, true);
+    assert.equal(result.data, "hello");
+    assert.equal(result.meta.capabilityId, "global.echo.say");
 });
 
 test("executes a mounted capability with injected defaults", async () => {
-  const registry = await createRegistry({ rootDir });
-  const resolved = resolveCapability(registry, ["toy", "echo", "say"], {
-    args: { message: "hello" }
-  });
+    const { registry, adapters } = await ctx();
+    const resolved = resolveCapability(registry, ["toy", "echo", "say"], {
+        args: { message: "hello" }
+    });
+    const runtime = { workspace: { root: "/srv/ax", viaMarker: true, source: "cwd-marker" } };
+    const result = await executeResolvedCapability(resolved, { adapters, runtime });
 
-  const result = await executeResolvedCapability(resolved);
+    assert.equal(result.ok, true);
+    assert.equal(result.data, "toy: hello");
+    assert.equal(result.meta.sourceCapabilityId, "global.echo.say");
+});
 
-  assert.equal(result.ok, true);
-  assert.equal(result.data, "toy: hello");
-  assert.equal(result.meta.capabilityId, "toolspace.toy.echo.say");
-  assert.equal(result.meta.sourceCapabilityId, "global.echo.say");
+test("blocks non-active capabilities unless --allow-draft", async () => {
+    const tmp = await mkdtemp(path.join(os.tmpdir(), "ax-resolver-"));
+    await mkdir(path.join(tmp, "manifests", "capabilities"), { recursive: true });
+    await writeFile(
+        path.join(tmp, "manifests", "capabilities", "global.echo.draft.json"),
+        JSON.stringify({
+            manifestVersion: "ax/v0",
+            id: "global.echo.draft",
+            summary: "Draft fixture for the lifecycle gate.",
+            provider: "draft",
+            adapterType: "internal",
+            executionTarget: { handler: "echo.say" },
+            argsSchema: { type: "object", properties: {} },
+            outputModes: ["json"],
+            sideEffects: "none",
+            scope: "global",
+            lifecycleState: "draft",
+            defaults: {},
+            policies: [],
+            owner: "test"
+        })
+    );
+    const registry = await createRegistry({ rootDir: tmp });
+    assert.throws(
+        () => resolveCapability(registry, ["echo", "draft"], { args: {} }),
+        /draft/
+    );
+});
+
+test("schema validation rejects wrong types", async () => {
+    const { registry } = await ctx();
+    assert.throws(
+        () =>
+            resolveCapability(registry, ["lex", "recall"], {
+                args: { list: "not-a-number" },
+                allowDraft: true
+            }),
+        /expected integer/
+    );
+});
+
+test("schema coerces string-numerics from the CLI into integers", async () => {
+    const { registry } = await ctx();
+    const resolved = resolveCapability(registry, ["lex", "recall"], {
+        args: { list: "5" },
+        allowDraft: true
+    });
+    assert.equal(resolved.args.list, 5);
+});
+
+test("framework flags are stripped from validated args", async () => {
+    const { registry } = await ctx();
+    const resolved = resolveCapability(registry, ["echo", "say"], {
+        args: { message: "x", json: true, "allow-draft": true }
+    });
+    assert.deepEqual(resolved.args, { message: "x" });
 });

@@ -1,136 +1,188 @@
 # AX Adapter Contract
 
+> Status: alpha — the two adapter kinds below are both implemented and
+> exercised by real providers (Lex, Majel). v0.1 may tighten field
+> names; it will not change the two-kind shape.
+
 ## Goal
 
 An AX adapter bridges a provider into AX's capability model.
 
 The provider may be:
-- an internal AX implementation
-- a CLI tool
+
+- an internal AX implementation (a function in this repo)
+- a CLI tool (Lex, Majel's `ax`)
 - a library
 - later: an RPC or MCP surface
 
-The adapter is owned by AX's integration model.
-It should not be assumed that the provider must implement AX-specific hooks.
+The adapter is owned by AX's integration model. **A provider does not
+need to implement AX-specific hooks.** AX adapts to the provider, never
+the reverse.
 
-## Rule
+## Two adapter kinds
 
-Adapters should be built against a declared AX contract, not invented ad hoc.
+AX recognizes two complementary kinds of adapter folder. They live
+side-by-side under `adapters/`. The loader keys them differently and
+the executor composes them when both are involved.
 
-That means an agent may help plan or scaffold an adapter, but the adapter shape itself must be defined by AX first.
+### Type adapter — generic dispatcher per `adapterType`
 
-## Minimal adapter responsibilities
-
-An adapter must be able to answer:
-
-1. What capabilities from this provider are exposed to AX?
-2. How does a logical AX capability map to the provider's callable surface?
-3. How is execution performed?
-4. How are args translated?
-5. How are outputs normalized?
-6. What defaults or policies can AX inject safely?
-
-## Suggested adapter file shape
+One folder per execution channel. Today: `internal`, `cli`. Each type
+adapter knows how to run any capability that declares
+`adapterType: <type>`. Capability-specific behavior comes from each
+capability's `executionTarget`, not from the adapter.
 
 ```text
 adapters/
-  lex/
-    adapter.manifest.json
-    map-capabilities.ts
-    resolve.ts
-    execute.ts
-    test/
+  internal/
+    adapter.manifest.json       # { kind: "type-adapter", type: "internal" }
+    index.js                    # exports async execute(resolved)
+    handlers/                   # internal-only registry of named handlers
+  cli/
+    adapter.manifest.json       # { kind: "type-adapter", type: "cli" }
+    index.js                    # spawns executionTarget.command, parses stdout
 ```
 
-## File responsibilities
+### Provider adapter — capability-specific wrapper composed over a type adapter
 
-### `adapter.manifest.json`
+One folder per provider when the provider has quirks the generic type
+adapter shouldn't carry: a non-standard envelope, idiosyncratic error
+conventions, args-to-flags translation that differs from the generic
+rule. A provider adapter declares the type it `composes`, and the
+executor calls it with a context that exposes the underlying type
+adapter so the provider can pre-process, delegate, post-process, or
+all three.
 
-Declares:
-- provider name
-- adapter type
-- supported scopes
-- supported execution modes
-- lifecycle state
-- whether the adapter is draft/reviewed/active
+```text
+adapters/
+  majel/
+    adapter.manifest.json       # { kind: "provider", name: "majel", composes: "cli" }
+    index.js                    # exports async execute(resolved, ctx)
+```
 
-### `map-capabilities.ts`
+A capability opts in by declaring `providerAdapter: "<name>"` alongside
+its `adapterType`. Without that field, the type adapter handles
+execution directly.
 
-Maps provider surface into AX capability IDs.
+## Capability execution flow
 
-This should answer:
-- which provider commands/functions exist
-- which are stable enough to expose
-- how they are named in AX
+```
+capability manifest
+  ├── adapterType:      "<type>"        // required, picks the type adapter
+  └── providerAdapter:  "<name>"?       // optional, picks a provider wrapper
 
-### `resolve.ts`
+executor
+  1. lookup type adapter by adapterType   (must exist)
+  2. lookup provider adapter by providerAdapter (if set)
+  3. assert provider.composes === adapterType
+  4. evaluate policies (warnings ride along; errors short-circuit)
+  5. call (provider ?? typeAdapter).execute(resolved, ctx)
+     where ctx = { types, typeAdapter }
+  6. attach providerAdapter + policyWarnings to result.meta
+```
 
-Turns a fully qualified AX capability plus context into a concrete execution plan.
+## Result shape (the only contract every adapter must honor)
 
-Examples of resolution output:
-- CLI command + args
-- library function + normalized params
+```js
+// success
+{ ok: true,  data: <any>,  meta: { capabilityId, adapterType, ...} }
 
-### `execute.ts`
+// failure
+{ ok: false, error: { message: "..." }, meta: { capabilityId, adapterType, ...} }
+```
 
-Runs the resolved plan and returns normalized output in AX's result shape.
+`meta` is the place to put adapter-specific telemetry (durations, raw
+envelopes, hints). The framework attaches `providerAdapter` and
+`policyWarnings` itself; everything else is up to the adapter.
 
-### `test/`
+## Adapter responsibilities
 
-Tests at least:
-- capability mapping
-- resolution behavior
-- output normalization
-- scope/default injection
+Every adapter must answer:
 
-## Adapter integration types
+1. Which capabilities does it serve? (type adapter: any with matching
+   `adapterType`; provider: any with matching `providerAdapter`.)
+2. How is execution performed?
+3. How are args translated to the provider's calling convention?
+4. How are outputs normalized into the AX result shape above?
+5. What defaults or policies can AX inject safely?
 
-### CLI adapter
+## Worked examples in this repo
 
-AX executes an existing CLI, often with JSON mode.
+| Provider | Type adapter | Provider adapter | Why |
+|---|---|---|---|
+| `echo` (built-in) | `internal` | none | trivial; no envelope |
+| `lex` | `cli` | none | Lex emits raw JSON; generic CLI suffices |
+| `majel` | `cli` | `majel` | Majel emits an `{command, success, errors[], hints[]}` envelope; provider unwraps it into AX's `{ok, error}` shape |
 
-Best when:
-- a stable CLI already exists
-- output is predictable
-- dependency coupling should stay low
+The Majel adapter is the canonical "provider adapter as envelope
+translator." Read [`adapters/majel/index.js`](../adapters/majel/index.js)
+before writing a new provider — it is small on purpose.
 
-### Library adapter
+## Toolspace-private adapters
 
-AX imports a package/module and calls code directly.
+Both adapter kinds may also live **privately under a single toolspace**
+rather than globally. The loader walks `toolspaces/<toolspace>/adapters/`
+in addition to `adapters/`. Toolspace-private adapters are visible only
+to capabilities mounted under their toolspace; they take precedence over
+any same-named global adapter when that toolspace is in play.
 
-Best when:
-- a stable library surface exists
-- richer integration is needed
-- tighter coupling is acceptable
+```text
+toolspaces/<toolspace>/
+  adapters/
+    <type>/                     # private type-adapter
+      adapter.manifest.json
+      index.js
+    <name>/                     # private provider adapter
+      adapter.manifest.json
+      index.js
+```
 
-## Example: Lex via CLI adapter
+Resolution order, per `(adapterType, providerAdapter)` lookup:
 
-Possible resolution:
+1. If the resolved capability is mounted, try `toolspaces/<ts>/adapters/`.
+2. Fall back to the global `adapters/`.
+3. Otherwise the executor errors with the search paths it tried.
 
-- AX ID: `global.lex.frame.recall`
-- execution target: `lex frame recall --json`
+`workspace-local` capabilities have no mount and therefore only ever
+resolve global adapters. Cross-toolspace reuse is not a goal: each
+toolspace's private adapters are isolated.
 
-Mounted version:
+`ax doctor` warns when:
 
-- AX ID: `toolspace.awa.lex.frame.recall`
-- execution target: same CLI
-- injected defaults: namespace `awa`, workspace path, policy checks
+- a `toolspaces/<ts>/adapters/` tree exists but no toolspace mount
+  declares `<ts>` (orphaned dir);
+- a private adapter shadows a same-named global one (so the override
+  is intentional, not silent).
 
-Important: `toolspace.awa.lex.frame.recall` does not require Lex to know what AWA is.
-AX can mediate scope and defaults.
+Use `ax init adapter --toolspace <ts> <name>` to scaffold a private
+adapter directly into the right path.
+
+## When to reach for a provider adapter
+
+Use a provider adapter when **any** of these is true:
+
+- The provider's stdout has a wrapper envelope you don't want every
+  caller to unwrap.
+- The provider conveys success/failure outside the process exit code.
+- Args need transformation the generic CLI rule (`--key value`)
+  doesn't capture (positional args, stdin payloads, config files).
+- The provider has hints / suggestions / next-step hooks worth
+  surfacing on `result.meta`.
+
+Otherwise the generic type adapter is enough. Default to "no provider
+adapter" until pain proves otherwise.
+
+## Lifecycle
+
+Adapters ship with `lifecycleState: "draft" | "reviewed" | "active"`.
+`ax doctor` reports adapter load issues; promotion is deliberate. There
+is no implicit promotion when an adapter "works once."
 
 ## Agent-assisted adapter work
 
-Adapter planning and scaffolding is a good target for an agent, but only after AX defines:
-
-- adapter file contract
-- capability naming rules
-- lifecycle rules
-- test expectations
-- execution result shape
-
-Otherwise the agent is inventing architecture instead of implementing against it.
-
-## Canonical sentence
-
-Mounted modules are resolved by AX through declared manifests and adapter bindings; providers do not need to implement AX-specific hooks unless they want a richer native integration.
+`ax init adapter <type>` and `ax init adapter --kind provider <name>`
+both scaffold a draft adapter against this contract. Agents are
+encouraged to drive the planning and scaffolding loop using the
+prompts under [`prompts/`](../prompts/). The contract is open on
+purpose: any agent that follows it can ship an adapter without privileged
+knowledge of the framework internals.

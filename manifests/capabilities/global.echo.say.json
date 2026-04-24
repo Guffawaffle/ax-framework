@@ -1,4 +1,5 @@
 {
+  "manifestVersion": "ax/v0",
   "id": "global.echo.say",
   "summary": "Return a message through the built-in echo provider",
   "provider": "echo",
@@ -11,10 +12,16 @@
     "properties": {
       "message": {
         "type": "string"
+      },
+      "prefix": {
+        "type": "string"
       }
     }
   },
-  "outputModes": ["text", "json"],
+  "outputModes": [
+    "text",
+    "json"
+  ],
   "sideEffects": "none",
   "scope": "global",
   "lifecycleState": "active",

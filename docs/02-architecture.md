@@ -64,7 +64,7 @@ Even if the first implementation proxies one through the other, AX should preser
 
 Preferred conceptual order:
 
-1. workspace-local
+1. workspace-local *(implemented; resolves `workspace.<module>.<cap>` and is reachable via shorthand `axf run <module> <cap>` when no global match exists)*
 2. toolspace-local
 3. global
 

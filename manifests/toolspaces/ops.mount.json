@@ -1,0 +1,17 @@
+{
+  "manifestVersion": "ax/v0",
+  "toolspace": "ops",
+  "lifecycleState": "active",
+  "moduleMounts": {
+    "lex": {
+      "source": "global.lex",
+      "mode": "proxy",
+      "capabilities": ["recall"]
+    },
+    "majel": {
+      "source": "global.majel",
+      "mode": "proxy",
+      "capabilities": ["status", "diff"]
+    }
+  }
+}

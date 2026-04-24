@@ -1,0 +1,10 @@
+{
+  "manifestVersion": "ax/v0",
+  "kind": "type-adapter",
+  "type": "<adapter-type>",
+  "summary": "What this adapter does, in one line.",
+  "entry": "index.js",
+  "supportedExecutionTargets": ["command"],
+  "lifecycleState": "draft",
+  "owner": "<owner>"
+}

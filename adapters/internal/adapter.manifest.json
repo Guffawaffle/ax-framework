@@ -1,0 +1,10 @@
+{
+  "manifestVersion": "ax/v0",
+  "kind": "type-adapter",
+  "type": "internal",
+  "summary": "Built-in handlers that run inside the AX process. Used for echo, draft templates, and any provider that should not require a subprocess.",
+  "entry": "index.js",
+  "supportedExecutionTargets": ["handler"],
+  "lifecycleState": "active",
+  "owner": "ax/core"
+}

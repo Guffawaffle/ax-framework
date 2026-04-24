@@ -7,6 +7,7 @@ import {
     validateCapabilityManifest,
     validateToolspaceManifest
 } from "./manifest-validator.js";
+import { loadFamilies, synthesizeFamilyCapabilities } from "./family-loader.js";
 
 export const SUPPORTED_MANIFEST_VERSIONS = new Set(["axf/v0"]);
 
@@ -14,6 +15,7 @@ export async function createRegistry({ rootDir, strict = true } = {}) {
     const manifestRoot = path.join(rootDir, "manifests");
     const registry = new ManifestRegistry(rootDir, { strict });
     await registry.loadFrom(manifestRoot);
+    await registry.loadFamiliesFrom(path.join(manifestRoot, "families"));
     return registry;
 }
 
@@ -23,17 +25,54 @@ export class ManifestRegistry {
         this.strict = strict;
         this.capabilities = new Map();
         this.toolspaces = new Map();
+        this.families = [];
         this.files = [];
         this.loadIssues = [];
         this.rejected = [];
     }
 
     async loadFrom(manifestRoot) {
-        const files = await listJsonFiles(manifestRoot);
+        const files = await listJsonFiles(manifestRoot, { skipDirs: ["families"] });
         this.files = files;
 
         for (const filePath of files) {
             await this.loadFile(filePath);
+        }
+    }
+
+    async loadFamiliesFrom(familiesRoot) {
+        const { families, issues } = await loadFamilies({
+            familiesRoot,
+            rootDir: this.rootDir
+        });
+        this.loadIssues.push(...issues);
+        this.families = families;
+        const existingIds = new Set(this.capabilities.keys());
+        for (const family of families) {
+            const synthesized = synthesizeFamilyCapabilities(family, { existingIds });
+            for (const cap of synthesized) {
+                // Materialized capability already loaded? Skip; that file wins.
+                if (this.capabilities.has(cap.id)) continue;
+                this.capabilities.set(cap.id, cap);
+            }
+        }
+        // Mark capabilities whose id matches a family entry: they are
+        // materialized overrides of an imported command.
+        for (const family of families) {
+            const scope = family.scope ?? "global";
+            const idPrefix = scope === "workspace-local" ? "workspace" : "global";
+            for (const cmdKey of Object.keys(family.commands)) {
+                const id = `${idPrefix}.${family.family}.${cmdKey}`;
+                const declared = this.capabilities.get(id);
+                if (declared && declared.origin !== "imported") {
+                    declared.origin = "materialized";
+                    declared.sourceFamily = declared.sourceFamily ?? {
+                        family: family.family,
+                        command: cmdKey,
+                        manifestPath: family.manifestPath
+                    };
+                }
+            }
         }
     }
 
@@ -202,7 +241,7 @@ export class ManifestRegistry {
     }
 }
 
-async function listJsonFiles(dirPath) {
+async function listJsonFiles(dirPath, { skipDirs = [] } = {}) {
     let entries;
     try {
         entries = await readdir(dirPath, { withFileTypes: true });
@@ -215,8 +254,11 @@ async function listJsonFiles(dirPath) {
     for (const entry of entries) {
         const childPath = path.join(dirPath, entry.name);
         if (entry.isDirectory()) {
-            results.push(...(await listJsonFiles(childPath)));
+            if (skipDirs.includes(entry.name)) continue;
+            results.push(...(await listJsonFiles(childPath, { skipDirs })));
         } else if (entry.isFile() && entry.name.endsWith(".json")) {
+            // Family files use a distinct suffix so listJsonFiles excludes them.
+            if (entry.name.endsWith(".family.json")) continue;
             results.push(childPath);
         }
     }

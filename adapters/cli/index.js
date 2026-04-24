@@ -7,7 +7,7 @@ const FRAMEWORK_ARG_KEYS = new Set(["json", "allow-draft", "any-lifecycle"]);
 export async function execute(resolved, ctx = {}) {
     const { capability, args } = resolved;
     const launchPlan = resolveCliLaunchPlan(capability, { runtime: ctx.runtime ?? null });
-    const cliArgs = [...launchPlan.argsPrefix, ...argsToCliArgs(args)];
+    const cliArgs = [...launchPlan.argsPrefix, ...argsToCliArgs(args, capability)];
     const result = spawnSync(launchPlan.command, cliArgs, {
         encoding: "utf8",
         stdio: ["ignore", "pipe", "pipe"]
@@ -57,17 +57,19 @@ export async function execute(resolved, ctx = {}) {
     };
 }
 
-function argsToCliArgs(args) {
+function argsToCliArgs(args, capability) {
+    const argMap = capability?.argMap ?? null;
     return Object.entries(args)
         .filter(([key]) => !FRAMEWORK_ARG_KEYS.has(key))
         .flatMap(([key, value]) => {
+            const flag = argMap?.[key] ?? `--${key}`;
             if (value === true) {
-                return [`--${key}`];
+                return [flag];
             }
             if (value === false || value === undefined || value === null) {
                 return [];
             }
-            return [`--${key}`, String(value)];
+            return [flag, String(value)];
         });
 }
 

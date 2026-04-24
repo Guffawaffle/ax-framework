@@ -181,6 +181,18 @@ async function inspectCommand(registry, adapters, tokens, ws = null, env = proce
     if (resolved.injectedDefaults && Object.keys(resolved.injectedDefaults).length > 0) {
         console.log(`defaults: ${JSON.stringify(resolved.injectedDefaults)}`);
     }
+    if (cap.origin) {
+        console.log(`origin: ${cap.origin}`);
+    }
+    if (cap.sourceFamily) {
+        console.log(`family: ${cap.sourceFamily.family}.${cap.sourceFamily.command} (${cap.sourceFamily.manifestPath})`);
+    }
+    if (cap.argMap && Object.keys(cap.argMap).length > 0) {
+        console.log(`argMap:`);
+        for (const [k, v] of Object.entries(cap.argMap)) {
+            console.log(`  ${k} -> ${v}`);
+        }
+    }
     if (launchPlan) {
         console.log(`launch.command: ${launchPlan.command}`);
         if (launchPlan.targetPath) {
@@ -226,7 +238,7 @@ async function initCommand(rootDir, tokens) {
     const [kind, ...args] = tokens;
     if (!kind || args.length === 0) {
         throw new AxError(
-            "init requires 'toolspace <name>', 'capability <id>', or 'adapter <type|name>'",
+            "init requires 'toolspace <name>', 'capability <id>', 'adapter <type|name>', 'family <name>', or 'materialize <family> <command>'",
             2
         );
     }
@@ -243,8 +255,110 @@ async function initCommand(rootDir, tokens) {
         await initAdapter(rootDir, args);
         return;
     }
+    if (kind === "family") {
+        await initFamily(rootDir, args[0]);
+        return;
+    }
+    if (kind === "materialize") {
+        await initMaterialize(rootDir, args);
+        return;
+    }
 
     throw new AxError(`unknown init kind '${kind}'`, 2);
+}
+
+async function initFamily(rootDir, name) {
+    if (!name) throw new AxError("init family requires a name", 2);
+    assertSafeName(name, "family");
+    const filePath = path.join(rootDir, "manifests", "families", `${name}.family.json`);
+    const manifest = {
+        manifestVersion: "axf/v0",
+        family: name,
+        scope: "global",
+        provider: name,
+        adapterType: "cli",
+        executionTarget: { command: name },
+        providerArgStyle: "double-dash-kebab",
+        outputModes: ["text"],
+        sideEffects: "unknown",
+        lifecycleState: "draft",
+        owner: "draft",
+        commands: {
+            status: {
+                summary: `Show ${name} status`,
+                executionTarget: { command: name, args: ["status"] },
+                args: {},
+                outputModes: ["text"],
+                sideEffects: "read"
+            }
+        }
+    };
+    await writeJsonFile(filePath, manifest);
+    console.log(`created draft family: ${path.relative(rootDir, filePath)}`);
+}
+
+async function initMaterialize(rootDir, args) {
+    const [familyName, commandKey] = args;
+    if (!familyName || !commandKey) {
+        throw new AxError("init materialize requires <family> <command>", 2);
+    }
+    assertSafeName(familyName, "family");
+    if (!/^[a-z][a-z0-9-]*$/.test(commandKey)) {
+        throw new AxError(`materialize command key must be kebab-case`, 2);
+    }
+    const familyPath = path.join(rootDir, "manifests", "families", `${familyName}.family.json`);
+    let family;
+    try {
+        family = JSON.parse(await readFile(familyPath, "utf8"));
+    } catch (error) {
+        throw new AxError(`cannot read family manifest at ${path.relative(rootDir, familyPath)}: ${error.message}`, 2);
+    }
+    const cmd = family.commands?.[commandKey];
+    if (!cmd) {
+        throw new AxError(`family '${familyName}' has no command '${commandKey}'`, 2);
+    }
+    const { computeArgMap } = await import("../core/family-loader.js");
+    const argMap = computeArgMap(cmd.args ?? {}, family);
+    const scope = family.scope ?? "global";
+    const idPrefix = scope === "workspace-local" ? "workspace" : "global";
+    const id = `${idPrefix}.${family.family}.${commandKey}`;
+    const filePath = path.join(rootDir, "manifests", "capabilities", `${id}.json`);
+    const properties = {};
+    const required = [];
+    for (const [name, spec] of Object.entries(cmd.args ?? {})) {
+        properties[name] = { type: spec.type ?? "string" };
+        if (spec.description) properties[name].description = spec.description;
+        if (spec.required) required.push(name);
+    }
+    const argsSchema = { type: "object", properties };
+    if (required.length > 0) argsSchema.required = required;
+    const manifest = {
+        manifestVersion: "axf/v0",
+        id,
+        summary: cmd.summary ?? `${family.family} ${commandKey}`,
+        provider: family.provider ?? family.family,
+        adapterType: family.adapterType,
+        executionTarget: cmd.executionTarget ?? family.executionTarget ?? {},
+        argsSchema,
+        outputModes: cmd.outputModes ?? family.outputModes ?? ["text"],
+        sideEffects: cmd.sideEffects ?? family.sideEffects ?? "unknown",
+        scope,
+        lifecycleState: cmd.lifecycleState ?? "draft",
+        defaults: cmd.defaults ?? {},
+        policies: cmd.policies ?? family.policies ?? [],
+        owner: cmd.owner ?? family.owner ?? "materialized",
+        argMap,
+        sourceFamily: {
+            family: family.family,
+            command: commandKey,
+            manifestPath: path.relative(rootDir, familyPath)
+        }
+    };
+    if (cmd.providerAdapter ?? family.providerAdapter) {
+        manifest.providerAdapter = cmd.providerAdapter ?? family.providerAdapter;
+    }
+    await writeJsonFile(filePath, manifest);
+    console.log(`materialized ${familyName}.${commandKey} -> ${path.relative(rootDir, filePath)}`);
 }
 
 async function initToolspace(rootDir, name) {

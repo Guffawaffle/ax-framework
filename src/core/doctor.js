@@ -1,4 +1,5 @@
 import { isImplemented, isKnown } from "./policy.js";
+import { detectFamilyDrift } from "./drift.js";
 
 export function inspectRegistry(registry, { adapters } = {}) {
     const issues = [...registry.loadIssues];
@@ -112,8 +113,21 @@ export function inspectRegistry(registry, { adapters } = {}) {
         rejectedCount: registry.rejected.length,
         adapterCount: adapters ? adapters.adapters.size : 0,
         adaptersByType: adapters ? collectAdapterProvenance(adapters) : [],
+        familyCount: registry.families?.length ?? 0,
+        drift: collectDrift(registry, issues),
         issues
     };
+}
+
+function collectDrift(registry, issues) {
+    const drift = detectFamilyDrift(registry);
+    for (const item of drift) {
+        issues.push({
+            severity: item.kind === "missing-source" ? "error" : "warning",
+            message: `drift: ${item.capabilityId}: ${item.message}`
+        });
+    }
+    return drift;
 }
 
 function collectAdapterProvenance(adapters) {

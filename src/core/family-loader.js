@@ -26,10 +26,12 @@
 
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
+import { LIFECYCLE_STATES } from "./manifest-validator.js";
 
 const SUPPORTED_FAMILY_VERSIONS = new Set(["axf/v0"]);
 const SUPPORTED_ARG_STYLES = new Set(["double-dash-kebab", "powershell-pascal"]);
 const SUPPORTED_SCOPES = new Set(["global", "workspace-local"]);
+const LIFECYCLE_ALIASES = new Map([["stable", "active"]]);
 
 // Args the framework reserves for itself. A family or capability that
 // declares one of these as a public arg is rejected, because the CLI
@@ -69,65 +71,104 @@ export async function loadFamilies({ familiesRoot, rootDir }) {
             });
             continue;
         }
-        const validation = validateFamilyManifest(manifest, relativePath);
+        const { manifest: normalized, issues: validation } = normalizeFamilyManifest(manifest, relativePath);
         if (validation.some((i) => i.severity === "error")) {
             issues.push(...validation);
             continue;
         }
         issues.push(...validation);
-        families.push({ ...manifest, manifestPath: relativePath });
+        families.push({ ...normalized, manifestPath: relativePath });
     }
     return { families, issues };
 }
 
 export function validateFamilyManifest(manifest, label) {
+    return normalizeFamilyManifest(manifest, label).issues;
+}
+
+function normalizeFamilyManifest(manifest, label) {
+    const normalized = {
+        ...manifest,
+        commands: manifest.commands
+            ? Object.fromEntries(
+                Object.entries(manifest.commands).map(([cmdKey, cmd]) => [cmdKey, { ...cmd }])
+            )
+            : manifest.commands
+    };
     const issues = [];
-    if (!SUPPORTED_FAMILY_VERSIONS.has(manifest.manifestVersion)) {
+    if (!SUPPORTED_FAMILY_VERSIONS.has(normalized.manifestVersion)) {
         issues.push({
             severity: "error",
-            message: `${label}: unsupported family manifestVersion '${manifest.manifestVersion}'`
+            message: `${label}: unsupported family manifestVersion '${normalized.manifestVersion}'`
         });
     }
-    if (!manifest.family || !/^[a-z][a-z0-9-]*$/.test(manifest.family)) {
+    if (!normalized.family || !/^[a-z][a-z0-9-]*$/.test(normalized.family)) {
         issues.push({
             severity: "error",
             message: `${label}: family must be a kebab-case name`
         });
     }
-    if (!manifest.adapterType) {
+    if (!normalized.adapterType) {
         issues.push({
             severity: "error",
             message: `${label}: family missing 'adapterType'`
         });
     }
-    if (manifest.scope && !SUPPORTED_SCOPES.has(manifest.scope)) {
+    if (normalized.scope && !SUPPORTED_SCOPES.has(normalized.scope)) {
         issues.push({
             severity: "error",
-            message: `${label}: family scope '${manifest.scope}' must be 'global' or 'workspace-local'`
+            message: `${label}: family scope '${normalized.scope}' must be 'global' or 'workspace-local'`
         });
     }
     if (
-        manifest.providerArgStyle !== undefined &&
-        !SUPPORTED_ARG_STYLES.has(manifest.providerArgStyle)
+        normalized.providerArgStyle !== undefined &&
+        !SUPPORTED_ARG_STYLES.has(normalized.providerArgStyle)
     ) {
         issues.push({
             severity: "error",
-            message: `${label}: providerArgStyle '${manifest.providerArgStyle}' is not supported (use 'double-dash-kebab' or 'powershell-pascal')`
+            message: `${label}: providerArgStyle '${normalized.providerArgStyle}' is not supported (use 'double-dash-kebab' or 'powershell-pascal')`
         });
     }
-    if (!manifest.commands || typeof manifest.commands !== "object" || Array.isArray(manifest.commands)) {
+    const familyLifecycle = canonicalizeLifecycleState(normalized.lifecycleState);
+    if (normalized.lifecycleState !== undefined && familyLifecycle === null) {
+        issues.push({
+            severity: "error",
+            message: `${label}: invalid lifecycleState '${normalized.lifecycleState}'`
+        });
+    } else if (familyLifecycle && familyLifecycle !== normalized.lifecycleState) {
+        issues.push({
+            severity: "warning",
+            message: `${label}: lifecycleState '${normalized.lifecycleState}' normalized to '${familyLifecycle}'`
+        });
+        normalized.lifecycleState = familyLifecycle;
+    }
+
+    if (!normalized.commands || typeof normalized.commands !== "object" || Array.isArray(normalized.commands)) {
         issues.push({
             severity: "error",
             message: `${label}: family requires a 'commands' object`
         });
-        return issues;
+        return { manifest: normalized, issues };
     }
-    for (const [cmdKey, cmd] of Object.entries(manifest.commands)) {
+    for (const [cmdKey, cmd] of Object.entries(normalized.commands)) {
         if (!/^[a-z][a-z0-9-]*$/.test(cmdKey)) {
             issues.push({
                 severity: "error",
                 message: `${label}: command key '${cmdKey}' must be kebab-case`
             });
+        }
+        const commandLifecycle = canonicalizeLifecycleState(cmd.lifecycleState);
+        if (cmd.lifecycleState !== undefined && commandLifecycle === null) {
+            issues.push({
+                severity: "error",
+                message: `${label}: command '${cmdKey}' has invalid lifecycleState '${cmd.lifecycleState}'`
+            });
+        } else if (commandLifecycle && commandLifecycle !== cmd.lifecycleState) {
+            issues.push({
+                severity: "warning",
+                message: `${label}: command '${cmdKey}' lifecycleState '${cmd.lifecycleState}' normalized to '${commandLifecycle}'`
+            });
+            cmd.lifecycleState = commandLifecycle;
         }
         if (cmd.args) {
             for (const argName of Object.keys(cmd.args)) {
@@ -140,7 +181,7 @@ export function validateFamilyManifest(manifest, label) {
             }
         }
     }
-    return issues;
+    return { manifest: normalized, issues };
 }
 
 // Build the capability records the registry exposes for a family.
@@ -230,4 +271,10 @@ function toPascal(name) {
         .filter(Boolean)
         .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
         .join("");
+}
+
+function canonicalizeLifecycleState(value) {
+    if (value === undefined) return undefined;
+    const normalized = LIFECYCLE_ALIASES.get(value) ?? value;
+    return LIFECYCLE_STATES.has(normalized) ? normalized : null;
 }

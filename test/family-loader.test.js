@@ -29,6 +29,20 @@ async function writeFamily(root, name, manifest) {
     return filePath;
 }
 
+function captureStdout(fn) {
+    const original = process.stdout.write.bind(process.stdout);
+    const chunks = [];
+    process.stdout.write = (chunk, ...rest) => {
+        chunks.push(typeof chunk === "string" ? chunk : chunk.toString());
+        return true;
+    };
+    return Promise.resolve(fn())
+        .finally(() => {
+            process.stdout.write = original;
+        })
+        .then(() => chunks.join(""));
+}
+
 const SAMPLE_GIT_FAMILY = {
     manifestVersion: "axf/v0",
     family: "git",
@@ -71,6 +85,55 @@ test("family loader synthesizes capabilities for each command", async () => {
     assert.equal(status.origin, "imported");
     assert.equal(status.sourceFamily.family, "git");
     assert.equal(status.sourceFamily.command, "status");
+});
+
+test("family lifecycle alias 'stable' is treated as active for imported runs", async () => {
+    const root = await bootstrap();
+    await mkdir(path.join(root, "adapters", "internal"), { recursive: true });
+    await writeFile(
+        path.join(root, "adapters", "internal", "adapter.manifest.json"),
+        JSON.stringify({
+            manifestVersion: "axf/v0",
+            kind: "type-adapter",
+            type: "internal",
+            entry: "index.js",
+            lifecycleState: "active"
+        })
+    );
+    await writeFile(
+        path.join(root, "adapters", "internal", "index.js"),
+        `export async function execute(resolved) {
+            return {
+                ok: true,
+                data: resolved.args?.message ?? null,
+                meta: { capabilityId: resolved.capability.id }
+            };
+        }`
+    );
+    await writeFamily(root, "demo", {
+        manifestVersion: "axf/v0",
+        family: "demo",
+        scope: "global",
+        provider: "demo",
+        adapterType: "internal",
+        executionTarget: { handler: "echo.say" },
+        lifecycleState: "stable",
+        commands: {
+            ping: {
+                summary: "ping",
+                args: {
+                    message: { type: "string" }
+                }
+            }
+        }
+    });
+
+    const out = await captureStdout(() =>
+        main(["--workspace", root, "run", "demo", "ping", "--message", "hi", "--json"])
+    );
+    const result = JSON.parse(out);
+    assert.equal(result.ok, true);
+    assert.equal(result.data, "hi");
 });
 
 test("family loader builds argMap with style + per-arg overrides", () => {

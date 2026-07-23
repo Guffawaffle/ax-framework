@@ -226,6 +226,7 @@ function compactDoctor(base, payload) {
     "rejectedCount",
     "adapterCount",
     "familyCount",
+    "sessionContext",
     "issues",
   ]) {
     copyAgentValue(base, payload, field);

@@ -1,7 +1,10 @@
 import { isImplemented, isKnown } from "./policy.js";
 import { detectFamilyDrift } from "./drift.js";
 
-export function inspectRegistry(registry, { adapters } = {}) {
+const SESSION_CONTEXT_CAPABILITY = "workspace.agent.session-context";
+const DEFAULT_SESSION_CONTEXT_PROVIDER = "workspace.lex.knowledge-context";
+
+export function inspectRegistry(registry, { adapters, runtime } = {}) {
   const issues = [...registry.loadIssues];
 
   // Mount referential integrity (validators don't see the cross-toolspace world).
@@ -120,7 +123,81 @@ export function inspectRegistry(registry, { adapters } = {}) {
     shadowedFamilies: summarizeFamilies(registry.shadowedFamilies ?? []),
     familyConflicts: registry.familyConflicts ?? [],
     drift: collectDrift(registry, issues),
+    sessionContext: summarizeSessionContext(registry, adapters, runtime),
     issues,
+  };
+}
+
+function summarizeSessionContext(registry, adapters, runtime) {
+  const composer = registry.getCapability(SESSION_CONTEXT_CAPABILITY);
+  if (!composer) {
+    return {
+      configured: false,
+      capabilityId: SESSION_CONTEXT_CAPABILITY,
+    };
+  }
+
+  const defaults = composer.defaults ?? {};
+  const providerId =
+    typeof defaults["context-provider"] === "string"
+      ? defaults["context-provider"]
+      : DEFAULT_SESSION_CONTEXT_PROVIDER;
+  const provider = registry.getCapability(providerId);
+  const providerAdapterAvailable =
+    provider && adapters
+      ? Boolean(
+          adapters.get(provider.adapterType, {
+            toolspace: provider.toolspace,
+          }),
+        )
+      : Boolean(provider);
+  const providerCommand =
+    typeof provider?.provider === "string" ? provider.provider : null;
+  const providerCommandResolution = providerCommand
+    ? runtime?.commands?.[providerCommand]
+    : null;
+  const providerCommandAvailable = runtime
+    ? Boolean(providerCommandResolution?.resolvedCommand)
+    : null;
+  const providerAvailable =
+    providerCommandAvailable === null
+      ? null
+      : Boolean(provider && providerAdapterAvailable && providerCommandAvailable);
+  const properties = composer.argsSchema?.properties ?? {};
+
+  return {
+    configured: true,
+    capabilityId: composer.id,
+    mode: defaults["context-mode"] ?? "off",
+    supportedModes: properties["context-mode"]?.enum ?? ["off", "shadow"],
+    provider: {
+      capabilityId: providerId,
+      available: providerAvailable,
+      capabilityAvailable: Boolean(provider),
+      adapterAvailable: Boolean(provider && providerAdapterAvailable),
+      command: providerCommand,
+      commandAvailable: providerCommandAvailable,
+      lifecycleState: provider?.lifecycleState ?? null,
+      adapterType: provider?.adapterType ?? null,
+    },
+    roots: {
+      projectRoot: null,
+      executionRoot: null,
+      projectRootArgument: Boolean(properties["project-root"]),
+      executionRootArgument: Boolean(properties["execution-root"]),
+      bindingPolicy: composer.policies?.includes("require_workspace_binding")
+        ? "require_workspace_binding"
+        : null,
+    },
+    fallback: {
+      preserves: ["axf-guidance", "lex-episodic-continuity"],
+      automaticModeChange: false,
+    },
+    budget: {
+      unit: "estimated-tokens",
+      maxTokens: defaults["max-tokens"] ?? null,
+      maxOutputChars: defaults["max-output-chars"] ?? null,
+    },
   };
 }
 

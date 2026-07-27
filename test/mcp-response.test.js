@@ -215,6 +215,53 @@ test("run profiles preserve data while removing successful execution traces", ()
   assert.equal("args" in compact, false);
 });
 
+test("all run profiles preserve bounded dirty-source provenance facts", () => {
+  const data = {
+    sourceProvenance: {
+      schemaVersion: 1,
+      sourceStateKind: "dirty-worktree",
+      worktreeDirty: true,
+      baseCommit: "28cf62e000000000000000000000000000000000",
+      sourceStateId: `dirty-sha256:${"b".repeat(64)}`,
+      worktreeFingerprint: `sha256:${"b".repeat(64)}`,
+      changedPathCount: 2,
+      changedPaths: [
+        { status: "M ", path: "mods/src/config.cc" },
+        { status: "??", path: "mods/src/new-diagnostic.cc" },
+      ],
+      changedPathsTruncated: false,
+      changedPathLimit: 64,
+      ignoredPathsIncluded: false,
+    },
+    buildHash: "ARTIFACT-SHA256",
+    deployedHash: "ARTIFACT-SHA256",
+    hashMatch: true,
+  };
+  const payload = {
+    ok: true,
+    operation: "run",
+    capability: {
+      id: "global.stfc-mod-private.cycle",
+      lifecycleState: "active",
+    },
+    data,
+    meta: {
+      capabilityId: "global.stfc-mod-private.cycle",
+      adapterType: "cli",
+    },
+    ...workspaceMetadata,
+  };
+
+  for (const detail of ["compact", "standard", "diagnostic"]) {
+    const projected = projectMcpResponse(payload, detail);
+    assert.deepEqual(projected.data, data);
+    assert.equal(projected.data.sourceProvenance.worktreeDirty, true);
+    assert.equal(projected.data.buildHash, "ARTIFACT-SHA256");
+    assert.equal(projected.data.deployedHash, "ARTIFACT-SHA256");
+    assert.equal(projected.data.hashMatch, true);
+  }
+});
+
 test("compact failures retain actionable errors without invocation traces", () => {
   const payload = {
     ok: false,

@@ -981,7 +981,17 @@ async function doctorCommand(
   cwd = process.cwd(),
 ) {
   const parsed = parseOptionTokens(tokens);
-  const report = inspectRegistry(registry, { adapters });
+  const runtimeDiagnostics = collectRuntimeDiagnostics(registry, {
+    workspace: workspaces?.registryWorkspace ?? null,
+    executionWorkspace: workspaces?.executionWorkspace ?? null,
+    env,
+    cwd,
+    platform: process.platform,
+  });
+  const report = inspectRegistry(registry, {
+    adapters,
+    runtime: runtimeDiagnostics.runtime,
+  });
   const workspaceSummary = summarizeWorkspaceBinding(
     registry,
     workspaces?.registryWorkspace ?? null,
@@ -999,15 +1009,16 @@ async function doctorCommand(
   if (workspaceSummary.executionWorkspace) {
     report.executionWorkspace = workspaceSummary.executionWorkspace;
   }
+  if (report.sessionContext?.configured) {
+    report.sessionContext.roots.projectRoot =
+      workspaceSummary.projectRoot?.root ?? registry.rootDir;
+    report.sessionContext.roots.executionRoot =
+      workspaceSummary.executionRoot?.root ??
+      workspaceSummary.projectRoot?.root ??
+      registry.rootDir;
+  }
   report.workspaces = workspaceSummary.workspaces;
   report.notes = workspaceSummary.notes;
-  const runtimeDiagnostics = collectRuntimeDiagnostics(registry, {
-    workspace: workspaces?.registryWorkspace ?? null,
-    executionWorkspace: workspaces?.executionWorkspace ?? null,
-    env,
-    cwd,
-    platform: process.platform,
-  });
   report.runtime = runtimeDiagnostics.runtime;
   report.issues.push(...runtimeDiagnostics.issues);
 
@@ -1047,6 +1058,20 @@ async function doctorCommand(
   console.log(`capabilities: ${report.capabilityCount}`);
   console.log(`toolspaces: ${report.toolspaceCount}`);
   console.log(`adapters: ${report.adapterCount}`);
+  if (report.sessionContext?.configured) {
+    console.log(
+      `session context: mode=${report.sessionContext.mode} provider=${report.sessionContext.provider.capabilityId} available=${report.sessionContext.provider.available}`,
+    );
+    console.log(
+      `  provider checks: capability=${report.sessionContext.provider.capabilityAvailable} adapter=${report.sessionContext.provider.adapterAvailable} command=${report.sessionContext.provider.command ?? "<none>"} available=${report.sessionContext.provider.commandAvailable}`,
+    );
+    console.log(
+      `  roots: project=${report.sessionContext.roots.projectRoot} execution=${report.sessionContext.roots.executionRoot}`,
+    );
+    console.log(
+      `  budget: ${report.sessionContext.budget.maxTokens} ${report.sessionContext.budget.unit}; fallback preserves ${report.sessionContext.fallback.preserves.join(", ")}`,
+    );
+  }
   if (report.families?.length > 0) {
     console.log("families:");
     for (const family of report.families) {

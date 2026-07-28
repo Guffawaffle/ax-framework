@@ -342,7 +342,6 @@ async function performDoctor(context) {
   const adapters = await loadAdapters({
     rootDir: context.registryWorkspace.root,
   });
-  const report = inspectRegistry(context.registry, { adapters });
   const runtimeDiagnostics = collectRuntimeDiagnostics(context.registry, {
     workspace: context.registryWorkspace,
     executionWorkspace: context.executionWorkspace,
@@ -350,8 +349,26 @@ async function performDoctor(context) {
     cwd: context.cwd,
     platform: context.runtime.platform,
   });
+  const report = inspectRegistry(context.registry, {
+    adapters,
+    runtime: runtimeDiagnostics.runtime,
+  });
   const issues = [...report.issues, ...runtimeDiagnostics.issues];
   const ok = !issues.some((issue) => issue.severity === "error");
+  const sessionContext = report.sessionContext?.configured
+    ? {
+        ...report.sessionContext,
+        roots: {
+          ...report.sessionContext.roots,
+          projectRoot:
+            context.workspaceSummary.projectRoot?.root ??
+            context.registryWorkspace.root,
+          executionRoot:
+            context.workspaceSummary.executionRoot?.root ??
+            context.executionWorkspace.root,
+        },
+      }
+    : report.sessionContext;
 
   return {
     ok,
@@ -368,6 +385,7 @@ async function performDoctor(context) {
     shadowedFamilies: report.shadowedFamilies,
     familyConflicts: report.familyConflicts,
     drift: report.drift,
+    sessionContext,
     issues,
     runtime: runtimeDiagnostics.runtime,
     projectRoot: context.workspaceSummary.projectRoot,

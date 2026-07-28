@@ -540,6 +540,71 @@ test("doctor --json includes workspace block with viaMarker flag", async () => {
   assert.equal(parsed.workspace.source, "explicit");
 });
 
+test("doctor reports missing session-provider commands in JSON and text", async () => {
+  const root = await bootstrap();
+  await writeCap(
+    root,
+    basicCap({
+      id: "workspace.lex.knowledge-context",
+      provider: "lex",
+      lifecycleState: "active",
+      scope: "workspace-local",
+    }),
+  );
+  await writeCap(
+    root,
+    basicCap({
+      id: "workspace.agent.session-context",
+      provider: "workspace",
+      lifecycleState: "active",
+      scope: "workspace-local",
+      argsSchema: {
+        type: "object",
+        properties: {
+          "context-mode": { type: "string", enum: ["off", "shadow"] },
+          "project-root": { type: "string" },
+          "execution-root": { type: "string" },
+        },
+        additionalProperties: false,
+      },
+      defaults: {
+        "context-mode": "off",
+        "context-provider": "workspace.lex.knowledge-context",
+        "max-tokens": 1200,
+        "max-output-chars": 16000,
+      },
+      policies: ["require_workspace_binding"],
+    }),
+  );
+  const options = {
+    cwd: root,
+    env: { ...process.env, PATH: "/definitely/not/a/path" },
+  };
+
+  const jsonOutput = await captureStdout(() =>
+    main(["--workspace", root, "doctor", "--json"], options),
+  );
+  const parsed = JSON.parse(jsonOutput);
+  assert.deepEqual(parsed.sessionContext.provider, {
+    capabilityId: "workspace.lex.knowledge-context",
+    available: false,
+    capabilityAvailable: true,
+    adapterAvailable: true,
+    command: "lex",
+    commandAvailable: false,
+    lifecycleState: "active",
+    adapterType: "internal",
+  });
+
+  const textOutput = await captureStdout(() =>
+    main(["--workspace", root, "doctor"], options),
+  );
+  assert.match(
+    textOutput,
+    /provider checks: capability=true adapter=true command=lex available=false/,
+  );
+});
+
 test("list reports project-root notes when an explicit root is empty and unmarked", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "ax-cli-empty-"));
 

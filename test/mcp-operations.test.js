@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { performOperation } from "../src/mcp/operations.js";
@@ -625,6 +625,107 @@ test("axf doctor returns structured diagnostics", async () => {
   assert.ok(result.runtime);
   assert.ok(result.projectRoot);
   assert.equal("workspace" in result, false);
+});
+
+test("axf doctor exposes session-context provider, roots, fallback, and budget", async () => {
+  const root = await tempAxfRoot("axf-mcp-session-doctor-");
+  const manifestNames = [
+    "workspace.agent.session-context.json",
+    "workspace.lex.knowledge-context.json",
+  ];
+  try {
+    for (const name of manifestNames) {
+      const source = await readFile(
+        path.join(
+          repoRoot,
+          "templates",
+          "session-context",
+          "manifests",
+          "capabilities",
+          name,
+        ),
+        "utf8",
+      );
+      await writeFile(
+        path.join(root, "manifests", "capabilities", name),
+        source,
+      );
+    }
+
+    const result = await performOperation({
+      operation: "doctor",
+      workspace: root,
+      responseDetail: "standard",
+    });
+
+    assert.equal(result.sessionContext.configured, true);
+    assert.equal(result.sessionContext.mode, "off");
+    assert.deepEqual(result.sessionContext.supportedModes, ["off", "shadow"]);
+    const commandAvailable = Boolean(
+      result.runtime.commands.lex.resolvedCommand,
+    );
+    assert.deepEqual(result.sessionContext.provider, {
+      capabilityId: "workspace.lex.knowledge-context",
+      available: commandAvailable,
+      capabilityAvailable: true,
+      adapterAvailable: true,
+      command: "lex",
+      commandAvailable,
+      lifecycleState: "active",
+      adapterType: "cli",
+    });
+    assert.equal(result.sessionContext.roots.projectRoot, root);
+    assert.equal(result.sessionContext.roots.executionRoot, root);
+    assert.deepEqual(result.sessionContext.fallback.preserves, [
+      "axf-guidance",
+      "lex-episodic-continuity",
+    ]);
+    assert.equal(result.sessionContext.fallback.automaticModeChange, false);
+    assert.deepEqual(result.sessionContext.budget, {
+      unit: "estimated-tokens",
+      maxTokens: 1200,
+      maxOutputChars: 16000,
+    });
+
+    const missingCommandDeps = {
+      env: { ...process.env, PATH: "/definitely/not/a/path" },
+    };
+    const compactMissing = await performOperation(
+      {
+        operation: "doctor",
+        workspace: root,
+      },
+      missingCommandDeps,
+    );
+    const standardMissing = await performOperation(
+      {
+        operation: "doctor",
+        workspace: root,
+        responseDetail: "standard",
+      },
+      missingCommandDeps,
+    );
+
+    assert.equal(compactMissing.sessionContext.provider.available, false);
+    assert.equal(
+      compactMissing.sessionContext.provider.capabilityAvailable,
+      true,
+    );
+    assert.equal(compactMissing.sessionContext.provider.adapterAvailable, true);
+    assert.equal(compactMissing.sessionContext.provider.command, "lex");
+    assert.equal(
+      compactMissing.sessionContext.provider.commandAvailable,
+      false,
+    );
+    assert.equal("runtime" in compactMissing, false);
+    assert.equal(
+      standardMissing.runtime.commands.lex.resolvedCommand,
+      null,
+    );
+    assert.equal(standardMissing.sessionContext.provider.available, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("axf scout_check stays read only", async () => {

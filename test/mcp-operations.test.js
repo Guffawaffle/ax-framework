@@ -27,6 +27,18 @@ async function writeFamily(root, name, manifest) {
   );
 }
 
+async function writeCapability(root, capability) {
+  await writeFile(
+    path.join(
+      root,
+      "manifests",
+      "capabilities",
+      `${capability.id}.json`,
+    ),
+    JSON.stringify(capability, null, 2) + "\n",
+  );
+}
+
 test("axf help explains the single-tool router contract", async () => {
   const result = await performOperation({
     operation: "help",
@@ -452,6 +464,141 @@ test("axf run succeeds for a harmless known AXF capability", async () => {
   assert.equal(result.operation, "run");
   assert.equal(result.capability.id, "global.echo.say");
   assert.equal(result.data, "hello via mcp");
+});
+
+test("failed CLI runs preserve JSON output and bound plain-text fallback data", async () => {
+  const root = await tempAxfRoot("axf-mcp-cli-failure-");
+  try {
+    await mkdir(path.join(root, "tools"), { recursive: true });
+    await writeFile(
+      path.join(root, "tools", "json-failure.mjs"),
+      [
+        `process.stdout.write(JSON.stringify({ code: "PROVIDER_REJECTED", retryable: false }));`,
+        `process.stderr.write("provider failed");`,
+        `process.exit(9);`,
+      ].join("\n"),
+    );
+    await writeFile(
+      path.join(root, "tools", "plain-failure.mjs"),
+      [
+        `process.stdout.write("x".repeat(9000));`,
+        `process.stderr.write("plain failure");`,
+        `process.exit(7);`,
+      ].join("\n"),
+    );
+    await writeFile(
+      path.join(root, "tools", "json-value-failure.mjs"),
+      [
+        `const index = process.argv.indexOf("--value");`,
+        `process.stdout.write(process.argv[index + 1]);`,
+        `process.exit(5);`,
+      ].join("\n"),
+    );
+    const capability = (id, targetPath) => ({
+      manifestVersion: "axf/v0",
+      id,
+      summary: "fail with provider evidence",
+      provider: "demo",
+      adapterType: "cli",
+      executionTarget: {
+        launcher: { command: process.execPath },
+        target: { path: targetPath, relativeTo: "workspace" },
+      },
+      argsSchema: {
+        type: "object",
+        properties: {},
+        additionalProperties: false,
+      },
+      outputModes: ["json"],
+      sideEffects: "none",
+      scope: "global",
+      lifecycleState: "active",
+      defaults: {},
+      policies: [],
+      owner: "test",
+    });
+    await writeCapability(
+      root,
+      capability("global.demo.json-failure", "tools/json-failure.mjs"),
+    );
+    await writeCapability(
+      root,
+      capability("global.demo.plain-failure", "tools/plain-failure.mjs"),
+    );
+    await writeCapability(
+      root,
+      {
+        ...capability(
+          "global.demo.json-value-failure",
+          "tools/json-value-failure.mjs",
+        ),
+        argsSchema: {
+          type: "object",
+          properties: { value: { type: "string" } },
+          required: ["value"],
+          additionalProperties: false,
+        },
+      },
+    );
+
+    const jsonData = { code: "PROVIDER_REJECTED", retryable: false };
+    for (const responseDetail of ["compact", "standard", "diagnostic"]) {
+      const result = await performOperation({
+        operation: "run",
+        workspace: root,
+        target: { id: "global.demo.json-failure" },
+        responseDetail,
+      });
+      assert.equal(result.ok, false);
+      assert.deepEqual(result.data, jsonData);
+      assert.equal(result.error.message, "provider failed");
+      assert.equal(result.meta.status, 9);
+    }
+
+    const plain = await performOperation({
+      operation: "run",
+      workspace: root,
+      target: { id: "global.demo.plain-failure" },
+    });
+    assert.equal(plain.ok, false);
+    assert.equal(plain.error.message, "plain failure");
+    assert.equal(plain.meta.status, 7);
+    assert.equal(plain.data.failureOutput.stdout.text.length, 8192);
+    assert.equal(plain.data.failureOutput.stdout.truncated, true);
+    assert.deepEqual(plain.data.failureOutput.stderr, {
+      text: "plain failure",
+      truncated: false,
+    });
+
+    const structuredValues = [
+      ["{}", {}],
+      ["[]", []],
+      ["null", null],
+      ["false", false],
+      ["0", 0],
+      [`""`, ""],
+    ];
+    for (const [value, expected] of structuredValues) {
+      for (const responseDetail of ["compact", "standard", "diagnostic"]) {
+        const result = await performOperation({
+          operation: "run",
+          workspace: root,
+          target: { id: "global.demo.json-value-failure" },
+          args: { value },
+          responseDetail,
+        });
+        assert.equal(result.ok, false);
+        assert.equal(
+          Object.prototype.hasOwnProperty.call(result, "data"),
+          true,
+          `${responseDetail} should retain JSON ${value}`,
+        );
+        assert.deepEqual(result.data, expected);
+      }
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("axf reports actionable guidance when operation is missing", async () => {

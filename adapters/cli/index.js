@@ -2,6 +2,9 @@ import { spawnSync } from "node:child_process";
 import { resolveCliLaunchPlan } from "../../src/core/cli-launch-plan.js";
 import { prepareCommandInvocation } from "../../src/core/command-invocation.js";
 
+const MAX_FAILURE_OUTPUT_CHARS = 8192;
+const MAX_ERROR_MESSAGE_CHARS = 1000;
+
 export async function execute(resolved, ctx = {}) {
   const { capability, args } = resolved;
   const launchPlan = resolveCliLaunchPlan(capability, {
@@ -31,12 +34,24 @@ export async function execute(resolved, ctx = {}) {
   }
 
   if (result.status !== 0) {
+    const stdout = result.stdout?.trim() ?? "";
+    const stderr = result.stderr?.trim() ?? "";
+    const parsed = parseJson(stdout);
+    const plainFailureData = parsed.ok
+      ? null
+      : buildPlainFailureData({ stdout, stderr });
     return {
       ok: false,
+      ...(parsed.ok
+        ? { data: parsed.value }
+        : plainFailureData
+          ? { data: plainFailureData }
+          : {}),
       error: {
-        message:
-          result.stderr?.trim() ||
-          `process exited with status ${result.status}`,
+        message: boundedTail(
+          stderr || stdout || `process exited with status ${result.status}`,
+          MAX_ERROR_MESSAGE_CHARS,
+        ).text,
       },
       meta: {
         ...meta,
@@ -99,4 +114,28 @@ function parseJsonMaybe(value) {
   } catch {
     return value;
   }
+}
+
+function parseJson(value) {
+  if (!value) return { ok: false, value: null };
+  try {
+    return { ok: true, value: JSON.parse(value) };
+  } catch {
+    return { ok: false, value: null };
+  }
+}
+
+function buildPlainFailureData({ stdout, stderr }) {
+  const failureOutput = {};
+  if (stdout) failureOutput.stdout = boundedTail(stdout, MAX_FAILURE_OUTPUT_CHARS);
+  if (stderr) failureOutput.stderr = boundedTail(stderr, MAX_FAILURE_OUTPUT_CHARS);
+  return Object.keys(failureOutput).length > 0 ? { failureOutput } : null;
+}
+
+function boundedTail(value, maximum) {
+  const codePoints = Array.from(String(value));
+  return {
+    text: codePoints.slice(-maximum).join(""),
+    truncated: codePoints.length > maximum,
+  };
 }

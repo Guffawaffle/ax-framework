@@ -67,7 +67,6 @@ function projectStandardResponse(payload) {
       projected.meta = withoutInvocationTrace(projected.meta);
       omitEmptyField(projected, "meta");
     } else {
-      delete projected.data;
       projected.meta = withoutInvocationTrace(projected.meta);
       omitEmptyField(projected, "meta");
     }
@@ -88,6 +87,7 @@ function projectCompactResponse(payload) {
         "id",
         "lifecycleState",
       ]);
+      copyPresentValue(base, payload, "data");
       copyAgentValue(base, payload, "meta");
     }
     copyAgentValue(base, payload, "error");
@@ -211,6 +211,7 @@ function compactRun(base, payload) {
     base.data = payload.data;
     copyAgentValue(base, payload, "meta");
   } else {
+    copyPresentValue(base, payload, "data");
     copyAgentValue(base, payload, "error");
     copyAgentValue(base, payload, "meta");
   }
@@ -297,6 +298,12 @@ function pickAgentValues(value, fields) {
 
 function copyAgentValue(target, source, field) {
   if (hasAgentValue(source?.[field])) target[field] = source[field];
+}
+
+function copyPresentValue(target, source, field) {
+  if (Object.prototype.hasOwnProperty.call(source, field)) {
+    target[field] = source[field];
+  }
 }
 
 function hasAgentValue(value) {

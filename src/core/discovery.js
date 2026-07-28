@@ -54,9 +54,15 @@ export function selectCapabilities(
   } = {},
 ) {
   const all = registry.listCapabilities({ includeDrafts });
+  const searchTerms = normalizeSearchTerms(search);
   const searched = all.filter((capability) =>
-    matchesSearch(capability, search),
+    matchesSearch(capability, searchTerms),
   );
+  const allLifecycleSearchMatched =
+    searchTerms.length === 0 ||
+    (includeDrafts ? searched.length > 0 : registry
+      .listCapabilities({ includeDrafts: true })
+      .some((capability) => matchesSearch(capability, searchTerms)));
   const filtered = searched.filter((capability) =>
     matchesSideEffects(capability, sideEffects),
   );
@@ -65,6 +71,11 @@ export function selectCapabilities(
       ? null
       : normalizeDiscoveryLimit(limit, DEFAULT_COMPACT_LIMIT);
   const selected = normalizedLimit ? filtered.slice(0, normalizedLimit) : filtered;
+  const matchMode = searchTerms.length > 0 ? "all-terms" : null;
+  const hint =
+    !allLifecycleSearchMatched && searchTerms.length > 1
+      ? buildSearchRecoveryHint(searchTerms)
+      : null;
 
   return {
     capabilities: compact
@@ -73,6 +84,8 @@ export function selectCapabilities(
     total: filtered.length,
     count: selected.length,
     truncated: selected.length < filtered.length,
+    matchMode,
+    hint,
     filters: {
       search: search || null,
       sideEffects: sideEffects || null,
@@ -515,9 +528,18 @@ function compareRecommendations(left, right) {
   return left.capabilityId.localeCompare(right.capabilityId);
 }
 
-function matchesSearch(capability, search) {
-  if (!search) return true;
-  const terms = String(search).toLowerCase().split(/\s+/).filter(Boolean);
+function normalizeSearchTerms(search) {
+  if (!search) return [];
+  return String(search).toLowerCase().split(/\s+/).filter(Boolean);
+}
+
+function buildSearchRecoveryHint(terms) {
+  const suggestedTerm = terms[0].slice(0, 80);
+  return `No capability matched every term; retry with a single distinctive token such as ${JSON.stringify(suggestedTerm)}.`;
+}
+
+function matchesSearch(capability, terms) {
+  if (terms.length === 0) return true;
   const haystack = [
     capability.id,
     capability.summary,

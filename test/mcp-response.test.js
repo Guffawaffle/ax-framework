@@ -263,13 +263,19 @@ test("all run profiles preserve bounded dirty-source provenance facts", () => {
 });
 
 test("compact failures retain actionable errors without invocation traces", () => {
+  const data = {
+    error: {
+      code: "PROVIDER_REJECTED",
+      details: { retryable: false },
+    },
+  };
   const payload = {
     ok: false,
     operation: "run",
     capability: { id: "global.demo.run", lifecycleState: "active" },
     input: { path: ["demo", "run"] },
     args: {},
-    data: null,
+    data,
     error: { code: "EXECUTION_FAILED", message: "demo exited 2" },
     meta: { command: "demo", status: 2, cwd: repoRoot },
     ...workspaceMetadata,
@@ -277,9 +283,13 @@ test("compact failures retain actionable errors without invocation traces", () =
 
   const compact = projectMcpResponse(payload, "compact");
   const standard = projectMcpResponse(payload, "standard");
+  const diagnostic = projectMcpResponse(payload, "diagnostic");
 
   assert.deepEqual(compact.error, payload.error);
   assert.deepEqual(compact.meta, { status: 2 });
+  assert.equal(compact.data, data);
+  assert.equal(standard.data, data);
+  assert.equal(diagnostic.data, data);
   assert.equal("args" in compact, false);
   assert.equal("args" in standard, false);
 });

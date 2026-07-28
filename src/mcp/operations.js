@@ -444,7 +444,9 @@ async function performRun(context) {
       capability: summarizeCapability(resolved.capability),
       input: resolved.input,
       args: resolved.args,
-      data: execution.ok ? execution.data : null,
+      ...(Object.prototype.hasOwnProperty.call(execution, "data")
+        ? { data: execution.data }
+        : {}),
       error: execution.ok
         ? null
         : {

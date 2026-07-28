@@ -164,6 +164,114 @@ test("compact discovery exposes provenance and applies search, effects, and boun
   }
 });
 
+test("zero-result multi-term searches expose all-term matching and a bounded recovery hint", async () => {
+  const root = await createWorkspace();
+  try {
+    await writeCapability(
+      root,
+      capability("global.demo.cycle", {
+        summary: "Cycle the demo build",
+      }),
+    );
+    await writeCapability(
+      root,
+      capability("global.demo.draft-cycle", {
+        summary: "Draft hidden-lifecycle capability",
+        lifecycleState: "draft",
+      }),
+    );
+    const registry = await createRegistry({ rootDir: root });
+    const selection = selectCapabilities(registry, {
+      compact: true,
+      search: "cycle releasedbg",
+    });
+
+    assert.equal(selection.count, 0);
+    assert.equal(selection.total, 0);
+    assert.equal(selection.matchMode, "all-terms");
+    assert.equal(
+      selection.hint,
+      `No capability matched every term; retry with a single distinctive token such as "cycle".`,
+    );
+    assert.ok(selection.hint.length < 200);
+
+    const mcp = await performOperation({
+      operation: "list",
+      projectRoot: root,
+      compact: true,
+      search: "cycle releasedbg",
+    });
+    assert.equal(mcp.matchMode, "all-terms");
+    assert.equal(mcp.hint, selection.hint);
+    assert.deepEqual(mcp.capabilities, []);
+
+    const cliJson = JSON.parse(
+      await captureStdout(() =>
+        main([
+          "--project-root",
+          root,
+          "list",
+          "--compact",
+          "--search",
+          "cycle releasedbg",
+          "--json",
+        ]),
+      ),
+    );
+    assert.equal(cliJson.matchMode, "all-terms");
+    assert.equal(cliJson.hint, selection.hint);
+
+    const cliText = await captureStdout(() =>
+      main([
+        "--project-root",
+        root,
+        "list",
+        "--compact",
+        "--search",
+        "cycle releasedbg",
+      ]),
+    );
+    assert.match(cliText, /no capabilities found/);
+    assert.match(cliText, /match mode: all-terms/);
+    assert.match(cliText, /hint: No capability matched every term/);
+
+    const singleTerm = selectCapabilities(registry, {
+      compact: true,
+      search: "lifecycle",
+    });
+    assert.equal(singleTerm.matchMode, "all-terms");
+    assert.equal(singleTerm.hint, null);
+
+    const lifecycleFiltered = selectCapabilities(registry, {
+      compact: true,
+      search: "draft hidden-lifecycle",
+      includeDrafts: false,
+    });
+    const lifecycleIncluded = selectCapabilities(registry, {
+      compact: true,
+      search: "draft hidden-lifecycle",
+      includeDrafts: true,
+    });
+    assert.equal(lifecycleFiltered.count, 0);
+    assert.equal(lifecycleFiltered.matchMode, "all-terms");
+    assert.equal(lifecycleFiltered.hint, null);
+    assert.equal(lifecycleIncluded.count, 1);
+    assert.equal(lifecycleIncluded.hint, null);
+
+    const compactLifecycleFiltered = await performOperation({
+      operation: "list",
+      projectRoot: root,
+      compact: true,
+      search: "draft hidden-lifecycle",
+    });
+    assert.equal(compactLifecycleFiltered.count, 0);
+    assert.equal(compactLifecycleFiltered.matchMode, "all-terms");
+    assert.equal("hint" in compactLifecycleFiltered, false);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test("explain distinguishes filtered, prefix, family, and missing states", async () => {
   const root = await createWorkspace();
   try {

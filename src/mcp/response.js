@@ -142,6 +142,8 @@ function compactList(base, payload) {
   copyAgentValue(base, payload, "total");
   copyAgentValue(base, payload, "count");
   copyAgentValue(base, payload, "truncated");
+  copyAgentValue(base, payload, "matchMode");
+  copyAgentValue(base, payload, "hint");
   copyAgentValue(base, payload.filters ?? {}, "limit");
   return withCompactContext(base, payload);
 }

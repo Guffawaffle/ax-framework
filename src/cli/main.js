@@ -263,6 +263,8 @@ async function listCommand(
       count: selection.count,
       total: selection.total,
       truncated: selection.truncated,
+      matchMode: selection.matchMode,
+      hint: selection.hint,
       filters: selection.filters,
       projectRoot: workspaceSummary.projectRoot,
       executionRoot: workspaceSummary.executionRoot,
@@ -280,6 +282,12 @@ async function listCommand(
 
   if (capabilities.length === 0) {
     console.log("no capabilities found");
+    if (selection.matchMode) {
+      console.log(`match mode: ${selection.matchMode}`);
+    }
+    if (selection.hint) {
+      console.log(`hint: ${selection.hint}`);
+    }
     return;
   }
 

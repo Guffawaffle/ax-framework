@@ -6,6 +6,7 @@ import {
   AXF_OPTION_PREFIX,
   isFrameworkReservedArgName,
 } from "./framework-options.js";
+import { validateCompletionContract } from "./awaitable.js";
 
 const REQUIRED_CAPABILITY_FIELDS = [
   "manifestVersion",
@@ -176,6 +177,15 @@ export function validateCapabilityManifest(manifest, label) {
       severity: "error",
       message: `${label}: examples must be an array of strings or objects`,
     });
+  }
+
+  if (manifest.completion !== undefined) {
+    for (const message of validateCompletionContract(
+      manifest.completion,
+      label,
+    )) {
+      issues.push({ severity: "error", message });
+    }
   }
 
   if (

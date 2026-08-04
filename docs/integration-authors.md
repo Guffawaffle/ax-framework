@@ -47,6 +47,12 @@ Avoid translating a complete provider vocabulary into AXF-flavored synonyms.
 Stable public names are useful where they reduce ambiguity; wholesale renaming
 adds drift and hides the system operators already know.
 
+When a successful provider invocation starts exact external work that may outlive the foreground
+call, declare an `external-awaitable` completion and return a typed continuation. Keep workflow IDs,
+commit SHAs, conditions, and deadlines in the runtime continuation rather than the static manifest.
+Never put credentials in either shape. The observer revalidates authority when invoked; discovery
+does not grant it. See [Awaitable completions](16-awaitable-completions.md).
+
 ## Choose the integration shape
 
 | Provider shape | AXF shape | Why |

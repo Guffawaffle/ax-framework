@@ -45,6 +45,7 @@ const DESCRIPTIVE_METADATA_KEYS = [
   "details",
   "examples",
   "recommendedFor",
+  "completion",
 ];
 
 export async function loadFamilies({ familiesRoot, rootDir }) {

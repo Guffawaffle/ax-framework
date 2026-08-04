@@ -449,6 +449,7 @@ test("framework repo ships only the tiny core capability surface", async () => {
   const registry = await createRegistry({ rootDir: REPO_ROOT });
 
   assert.ok(registry.getCapability("global.echo.say"));
+  assert.ok(registry.getCapability("global.await.external"));
   assert.equal(registry.getCapability("global.lex.status"), undefined);
   assert.equal(registry.getCapability("global.majel.status"), undefined);
   assert.equal(registry.families.length, 0);

@@ -435,6 +435,7 @@ async function performRun(context) {
   const execution = await executeResolvedCapability(resolved, {
     adapters,
     runtime: context.runtime,
+    signal: context.signal,
   });
 
   return attachWorkspace(
@@ -446,6 +447,9 @@ async function performRun(context) {
       args: resolved.args,
       ...(Object.prototype.hasOwnProperty.call(execution, "data")
         ? { data: execution.data }
+        : {}),
+      ...(Object.prototype.hasOwnProperty.call(execution, "continuations")
+        ? { continuations: execution.continuations }
         : {}),
       error: execution.ok
         ? null
@@ -497,15 +501,19 @@ async function createContext(input, options) {
     workspaces,
     workspaceSummary,
     registry,
-    runtime: buildRuntime(workspaces, env, cwd),
+    signal: options.signal ?? null,
+    runtime: buildRuntime(workspaces, env, cwd, options),
   };
 }
 
-function buildRuntime(workspaces, env, cwd) {
+function buildRuntime(workspaces, env, cwd, options = {}) {
   return {
     cwd,
     env,
     platform: process.platform,
+    ...(options.fetch ? { awaitFetch: options.fetch } : {}),
+    ...(options.now ? { awaitNow: options.now } : {}),
+    ...(options.wait ? { awaitWait: options.wait } : {}),
     projectRoot: {
       root: workspaces.registryWorkspace.root,
       viaMarker: workspaces.registryWorkspace.viaMarker,
@@ -751,6 +759,7 @@ function summarizeCapability(capability) {
     provider: capability.provider,
     providerAdapter: capability.providerAdapter ?? null,
     sourceCapabilityId: capability.sourceCapabilityId ?? null,
+    ...(capability.completion ? { completion: capability.completion } : {}),
   };
 }
 

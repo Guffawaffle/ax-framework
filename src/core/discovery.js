@@ -104,6 +104,7 @@ export function summarizeCapabilityForDiscovery(capability) {
     scope: capability.scope,
     lifecycleState: capability.lifecycleState,
     sideEffects: capability.sideEffects,
+    ...(capability.completion ? { completion: capability.completion } : {}),
     sourceKind: provenance.kind,
     provenance,
   };

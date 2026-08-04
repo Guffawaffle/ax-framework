@@ -126,12 +126,33 @@ export class AXFMCPServer {
   constructor(options = {}) {
     this.cwd = options.cwd ?? process.cwd();
     this.env = options.env ?? process.env;
+    this.pendingRequests = new Map();
   }
 
   async handleRequest(request) {
+    if (request.method === "notifications/cancelled") {
+      this.cancelRequest(request.params?.requestId, request.params?.reason);
+      return null;
+    }
+
+    const requestId = request.id;
+    const controller = new AbortController();
+    const tracked = requestId !== undefined && requestId !== null;
+    if (tracked) {
+      if (this.pendingRequests.has(requestId)) {
+        return {
+          error: {
+            code: -32600,
+            message: `Duplicate in-flight request id: ${requestId}`,
+          },
+        };
+      }
+      this.pendingRequests.set(requestId, controller);
+    }
     const runtime = {
       cwd: this.cwd,
       env: this.env,
+      signal: controller.signal,
     };
 
     try {
@@ -172,6 +193,23 @@ export class AXFMCPServer {
           message: error?.message ?? String(error),
         },
       };
+    } finally {
+      if (tracked && this.pendingRequests.get(requestId) === controller) {
+        this.pendingRequests.delete(requestId);
+      }
+    }
+  }
+
+  cancelRequest(requestId, reason = "MCP client cancelled the request") {
+    const controller = this.pendingRequests.get(requestId);
+    if (!controller) return false;
+    controller.abort(new Error(String(reason)));
+    return true;
+  }
+
+  abortAll(reason = "AXF MCP server is shutting down") {
+    for (const controller of this.pendingRequests.values()) {
+      controller.abort(new Error(reason));
     }
   }
 
@@ -195,47 +233,66 @@ export class AXFMCPServer {
 export function startStdioServer(options = {}) {
   const server = new AXFMCPServer(options);
   let buffer = Buffer.alloc(0);
-  let draining = Promise.resolve();
 
   process.stdin.on("data", (chunk) => {
     buffer = Buffer.concat([buffer, chunk]);
-    draining = draining
-      .then(async () => {
-        while (true) {
-          const request = readMessage();
-          if (!request) {
-            return;
-          }
-          if (request.id === undefined || request.id === null) {
-            continue;
-          }
+    try {
+      while (true) {
+        const request = readMessage();
+        if (!request) return;
 
-          const response = await server.handleRequest(request);
-          writeMessage(
-            response?.error
-              ? {
-                  jsonrpc: "2.0",
-                  id: request.id,
-                  error: response.error,
-                }
-              : {
-                  jsonrpc: "2.0",
-                  id: request.id,
-                  result: response,
-                },
-          );
+        if (request.id === undefined || request.id === null) {
+          void server.handleRequest(request);
+          continue;
         }
-      })
-      .catch((error) => {
-        const message = error?.message ?? String(error);
-        process.stderr.write(`axf-mcp: ${message}\n`);
-      });
+
+        void server
+          .handleRequest(request)
+          .then((response) => {
+            if (response === null) return;
+            writeMessage(
+              response?.error
+                ? {
+                    jsonrpc: "2.0",
+                    id: request.id,
+                    error: response.error,
+                  }
+                : {
+                    jsonrpc: "2.0",
+                    id: request.id,
+                    result: response,
+                  },
+            );
+          })
+          .catch((error) => {
+            writeMessage({
+              jsonrpc: "2.0",
+              id: request.id,
+              error: {
+                code: -32603,
+                message: error?.message ?? String(error),
+              },
+            });
+          });
+      }
+    } catch (error) {
+      const message = error?.message ?? String(error);
+      process.stderr.write(`axf-mcp: ${message}\n`);
+    }
+  });
+  process.stdin.on("end", () => {
+    server.abortAll("AXF MCP input closed");
   });
 
-  process.on("SIGINT", () => process.exit(0));
-  process.on("SIGTERM", () => process.exit(0));
+  process.on("SIGINT", () => shutdown("SIGINT"));
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
 
   return server;
+
+  function shutdown(signal) {
+    server.abortAll(`AXF MCP server received ${signal}`);
+    process.exit(0);
+  }
 
   function readMessage() {
     while (buffer.length > 0) {

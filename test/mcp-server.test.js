@@ -281,6 +281,69 @@ test("persistent MCP server reloads registry state between list calls", async ()
   }
 });
 
+test("persistent MCP server remains responsive and cancels a process-bound Await", async () => {
+  const session = await startPersistentStdioServer(
+    [path.join(repoRoot, "bin", "axf-mcp.js")],
+    {
+      cwd: repoRoot,
+      workspace: repoRoot,
+      env: { AXF_AWAIT_ENABLE_TEST_PROVIDERS: "1" },
+    },
+  );
+
+  try {
+    await session.send(initializeRequest(1));
+    const awaiting = session.send(
+      {
+        jsonrpc: "2.0",
+        id: 2,
+        method: "tools/call",
+        params: {
+          name: "axf",
+          arguments: {
+            operation: "run",
+            workspace: repoRoot,
+            target: { id: "global.await.external" },
+            args: {
+              descriptor: {
+                schemaVersion: "axf/awaitable/v1",
+                kind: "test.timer",
+                subject: { readyAfterObservations: 10_000 },
+                condition: { type: "observation-count" },
+              },
+              deadlineMs: 30_000,
+            },
+          },
+        },
+      },
+      { timeout: 5_000 },
+    );
+
+    const ping = await session.send({
+      jsonrpc: "2.0",
+      id: 3,
+      method: "ping",
+      params: {},
+    });
+    assert.deepEqual(ping.result, {});
+
+    await session.send({
+      jsonrpc: "2.0",
+      method: "notifications/cancelled",
+      params: { requestId: 2, reason: "test cancellation" },
+    });
+    const cancelled = await awaiting;
+    assert.equal(cancelled.result.isError, false);
+    assert.equal(cancelled.result.structuredContent.data.outcome, "cancelled");
+    assert.equal(
+      cancelled.result.structuredContent.data.underlyingCancellation,
+      false,
+    );
+  } finally {
+    await session.stop();
+  }
+});
+
 async function requestStdioServer(args, requests, options = {}) {
   const encode = options.encodeMessage ?? encodeLineMessage;
   const proc = spawn(process.execPath, args, {

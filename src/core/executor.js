@@ -15,9 +15,13 @@
 // The contract is just: return { ok, data | error, meta }.
 
 import { AxError } from "./errors.js";
+import { validateExecutionContinuations } from "./awaitable.js";
 import { evaluatePolicies } from "./policy.js";
 
-export async function executeResolvedCapability(resolved, { adapters, runtime = null } = {}) {
+export async function executeResolvedCapability(
+    resolved,
+    { adapters, runtime = null, signal = null } = {}
+) {
     if (!adapters) {
         throw new AxError("executor requires an adapter registry", 1);
     }
@@ -71,11 +75,15 @@ export async function executeResolvedCapability(resolved, { adapters, runtime = 
     const ctx = {
         types: adapters,
         typeAdapter,
-        runtime
+        runtime,
+        signal
     };
 
     const exec = provider ?? typeAdapter;
-    const result = await exec.execute(resolved, ctx);
+    const result = validateExecutionContinuations(
+        await exec.execute(resolved, ctx),
+        resolved.capability
+    );
 
     if (result?.meta) {
         if (providerName) result.meta.providerAdapter = providerName;

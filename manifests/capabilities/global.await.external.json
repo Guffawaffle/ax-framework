@@ -1,0 +1,78 @@
+{
+  "manifestVersion": "axf/v0",
+  "id": "global.await.external",
+  "summary": "Observe an exact external operation until a declared terminal condition",
+  "provider": "await",
+  "adapterType": "internal",
+  "executionTarget": {
+    "handler": "await.external"
+  },
+  "argsSchema": {
+    "type": "object",
+    "properties": {
+      "descriptor": {
+        "type": "object",
+        "properties": {
+          "schemaVersion": {
+            "type": "string",
+            "enum": ["axf/awaitable/v1"]
+          },
+          "kind": {
+            "type": "string",
+            "minLength": 3
+          },
+          "subject": {
+            "type": "object"
+          },
+          "condition": {
+            "type": "object"
+          }
+        },
+        "required": ["schemaVersion", "kind", "subject", "condition"],
+        "additionalProperties": false
+      },
+      "descriptorJson": {
+        "type": "string",
+        "minLength": 2
+      },
+      "deadlineMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 1800000
+      }
+    },
+    "required": ["deadlineMs"],
+    "additionalProperties": false
+  },
+  "outputModes": ["json"],
+  "sideEffects": "network",
+  "scope": "global",
+  "lifecycleState": "active",
+  "defaults": {},
+  "policies": [],
+  "owner": "module:await",
+  "examples": [
+    {
+      "operation": "run",
+      "target": { "id": "global.await.external" },
+      "args": {
+        "descriptor": {
+          "schemaVersion": "axf/awaitable/v1",
+          "kind": "github.required-checks",
+          "subject": {
+            "repository": "owner/repository",
+            "headSha": "0123456789abcdef0123456789abcdef01234567"
+          },
+          "condition": {
+            "type": "all-required-checks-terminal",
+            "requiredChecks": [
+              { "source": "check-run", "name": "Windows" },
+              { "source": "check-run", "name": "macOS" }
+            ]
+          }
+        },
+        "deadlineMs": 1800000
+      }
+    }
+  ]
+}

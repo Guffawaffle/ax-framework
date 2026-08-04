@@ -112,6 +112,11 @@ const operationPayloads = [
       defaults: {},
       policies: [],
       outputModes: ["json"],
+      completion: {
+        mode: "external-awaitable",
+        descriptorSchema: "axf/awaitable/v1",
+        observer: "global.await.external",
+      },
       warnings: ["Inspect before execution"],
       details: { report: "generated-report.json" },
       manifestPath: "/private/manifest.json",
@@ -165,12 +170,30 @@ for (const payload of operationPayloads) {
     if (payload.operation === "inspect") {
       assert.deepEqual(compact.capability.warnings, payload.capability.warnings);
       assert.deepEqual(compact.capability.details, payload.capability.details);
+      assert.deepEqual(compact.capability.completion, payload.capability.completion);
     }
   });
 }
 
 test("run profiles preserve data while removing successful execution traces", () => {
   const data = { answer: [1, 2, 3] };
+  const continuations = [
+    {
+      kind: "await-external",
+      recommended: true,
+      reason: "Checks remain externally owned.",
+      capability: "global.await.external",
+      args: {
+        descriptor: {
+          schemaVersion: "axf/awaitable/v1",
+          kind: "github.required-checks",
+          subject: { repository: "owner/repo", headSha: "a".repeat(40) },
+          condition: { type: "all-required-checks-terminal" },
+        },
+        deadlineMs: 30_000,
+      },
+    },
+  ];
   const payload = {
     ok: true,
     operation: "run",
@@ -186,6 +209,7 @@ test("run profiles preserve data while removing successful execution traces", ()
     input: { path: ["demo", "run"] },
     args: { limit: 20 },
     data,
+    continuations,
     error: null,
     meta: {
       capabilityId: "global.demo.run",
@@ -205,6 +229,8 @@ test("run profiles preserve data while removing successful execution traces", ()
 
   assert.equal(standard.data, data);
   assert.equal(compact.data, data);
+  assert.deepEqual(standard.continuations, continuations);
+  assert.deepEqual(compact.continuations, continuations);
   assert.deepEqual(standard.meta, {
     hints: ["Inspect the generated report"],
     policyWarnings: ["read-only workspace"],

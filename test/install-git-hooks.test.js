@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 
-test("prepare skips hooks in npm's transient git-dependency checkout", () => {
+test("postinstall skips hooks in npm's transient git-dependency checkout", () => {
   const result = spawnSync(
     process.execPath,
     [path.join(repoRoot, "scripts", "install-git-hooks.mjs")],
@@ -23,7 +23,7 @@ test("prepare skips hooks in npm's transient git-dependency checkout", () => {
   assert.match(result.stdout, /Skipping git hooks outside the active AXF checkout/);
 });
 
-test("prepare is safe before the hook dev dependency is available", async () => {
+test("postinstall is safe when the hook dev dependency is unavailable", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "axf-prepare-"));
   try {
     const scriptsDir = path.join(root, "scripts");

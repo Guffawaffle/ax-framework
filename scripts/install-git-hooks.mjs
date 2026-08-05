@@ -7,9 +7,8 @@ const initialCwd = process.env.INIT_CWD
   ? path.resolve(process.env.INIT_CWD)
   : null;
 
-// npm prepares git dependencies in a temporary clone before making their
-// development binaries available. Hooks belong only to the checkout where
-// npm was invoked, never to that transient dependency clone.
+// Hooks belong only to the checkout where npm was invoked. Package consumers
+// and npm's transient dependency staging directories must remain untouched.
 if (initialCwd !== sourceRoot || !existsSync(path.join(sourceRoot, ".git"))) {
   console.log("[INFO] Skipping git hooks outside the active AXF checkout");
 } else {

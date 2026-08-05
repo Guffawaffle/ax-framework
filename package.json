@@ -26,7 +26,7 @@
     "axf-mcp": "node bin/axf-mcp.js",
     "lint": "eslint . --max-warnings 0",
     "lint:fix": "eslint . --fix",
-    "prepare": "node scripts/install-git-hooks.mjs",
+    "postinstall": "node scripts/install-git-hooks.mjs",
     "test": "node --test"
   },
   "simple-git-hooks": {

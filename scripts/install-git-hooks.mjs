@@ -1,10 +1,10 @@
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const sourceRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
+const sourceRoot = canonicalPath(fileURLToPath(new URL("..", import.meta.url)));
 const initialCwd = process.env.INIT_CWD
-  ? path.resolve(process.env.INIT_CWD)
+  ? canonicalPath(process.env.INIT_CWD)
   : null;
 
 // Hooks belong only to the checkout where npm was invoked. Package consumers
@@ -23,4 +23,15 @@ if (initialCwd !== sourceRoot || !existsSync(path.join(sourceRoot, ".git"))) {
     await hooks.setHooksFromConfig(sourceRoot, process.argv.slice(2));
     console.log("[INFO] Successfully set all git hooks");
   }
+}
+
+function canonicalPath(value) {
+  const resolved = path.resolve(value);
+  let canonical;
+  try {
+    canonical = realpathSync.native(resolved);
+  } catch {
+    canonical = resolved;
+  }
+  return process.platform === "win32" ? canonical.toLowerCase() : canonical;
 }

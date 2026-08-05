@@ -66,3 +66,25 @@ test("coerces literal boolean strings", () => {
     assert.equal(valid, true);
     assert.equal(value.b, true);
 });
+
+test("oneOf requires exactly one matching schema", () => {
+    const schema = {
+        type: "object",
+        properties: {
+            descriptor: { type: "object" },
+            descriptorJson: { type: "string" }
+        },
+        oneOf: [
+            { required: ["descriptor"] },
+            { required: ["descriptorJson"] }
+        ]
+    };
+
+    assert.equal(validateAndCoerce(schema, { descriptor: {} }).valid, true);
+    assert.equal(validateAndCoerce(schema, { descriptorJson: "{}" }).valid, true);
+    assert.equal(validateAndCoerce(schema, {}).valid, false);
+    assert.equal(
+        validateAndCoerce(schema, { descriptor: {}, descriptorJson: "{}" }).valid,
+        false
+    );
+});

@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { toKebab } from "./naming.js";
 
 export const DEFAULT_COMPACT_LIMIT = 25;
 export const DEFAULT_GUIDE_LIMIT = 12;
@@ -408,29 +409,45 @@ export async function buildWorkflowGuide(
 export function buildCapabilityExamples(capability) {
   const properties = capability.argsSchema?.properties ?? {};
   const required = new Set(capability.argsSchema?.required ?? []);
+  const declared = Array.isArray(capability.examples) ? capability.examples : [];
+  const declaredRunArgs =
+    declared.find(
+      (example) =>
+        example?.operation === "run" &&
+        example.args !== null &&
+        typeof example.args === "object" &&
+        !Array.isArray(example.args),
+    )?.args ?? {};
   const args = {};
   const mapping = [];
 
   for (const [name, schema] of Object.entries(properties)) {
+    const hasDeclaredExample = Object.hasOwn(declaredRunArgs, name);
     const hasDefault =
       Object.hasOwn(capability.defaults ?? {}, name) || schema.default !== undefined;
-    if (!required.has(name) && !hasDefault && schema.example === undefined) {
+    if (
+      !required.has(name) &&
+      !hasDefault &&
+      schema.example === undefined &&
+      !hasDeclaredExample
+    ) {
       mapping.push(buildArgumentMapping(capability, name, schema, false, null));
       continue;
     }
-    const value = exampleValue(name, schema, capability.defaults?.[name]);
+    const value = hasDeclaredExample
+      ? declaredRunArgs[name]
+      : exampleValue(name, schema, capability.defaults?.[name]);
     args[name] = value;
     mapping.push(
       buildArgumentMapping(capability, name, schema, required.has(name), value),
     );
   }
 
-  const cliArgs = Object.entries(args).flatMap(([name, value]) => [
-    `--${toKebab(name)}`,
-    formatCliValue(value),
-  ]);
+  const cliArgs = Object.entries(args).flatMap(([name, value]) =>
+    buildCliArgument(properties, name, value),
+  );
   return {
-    declared: Array.isArray(capability.examples) ? capability.examples : [],
+    declared,
     inspect: {
       cli: `axf inspect ${capability.id}`,
       mcp: { operation: "inspect", target: { id: capability.id } },
@@ -608,9 +625,13 @@ function formatCliValue(value) {
   return JSON.stringify(value);
 }
 
-function toKebab(name) {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .replace(/_+/g, "-")
-    .toLowerCase();
+function buildCliArgument(properties, name, value) {
+  if (value !== null && typeof value === "object") {
+    const jsonName = `${name}Json`;
+    if (properties[jsonName]?.type === "string") {
+      const json = JSON.stringify(value).replace(/'/g, "''");
+      return [`--${toKebab(jsonName)}`, `'${json}'`];
+    }
+  }
+  return [`--${toKebab(name)}`, formatCliValue(value)];
 }

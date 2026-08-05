@@ -42,6 +42,10 @@
       }
     },
     "required": ["deadlineMs"],
+    "oneOf": [
+      { "required": ["descriptor"] },
+      { "required": ["descriptorJson"] }
+    ],
     "additionalProperties": false
   },
   "outputModes": ["json"],

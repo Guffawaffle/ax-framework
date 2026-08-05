@@ -473,6 +473,41 @@ test("inspect examples map public arguments through provider flags", () => {
   ]);
 });
 
+test("inspect examples reuse declared run args for exclusive optional inputs", () => {
+  const descriptor = { schemaVersion: "axf/awaitable/v1", kind: "demo" };
+  const examples = buildCapabilityExamples(
+    capability("global.demo.wait", {
+      argsSchema: {
+        type: "object",
+        properties: {
+          descriptor: { type: "object" },
+          descriptorJson: { type: "string" },
+          deadlineMs: { type: "integer", minimum: 1000 },
+        },
+        required: ["deadlineMs"],
+        oneOf: [
+          { required: ["descriptor"] },
+          { required: ["descriptorJson"] },
+        ],
+      },
+      examples: [
+        {
+          operation: "run",
+          target: { id: "global.demo.wait" },
+          args: { descriptor, deadlineMs: 1800000 },
+        },
+      ],
+    }),
+  );
+
+  assert.deepEqual(examples.run.mcp.args, {
+    descriptor,
+    deadlineMs: 1800000,
+  });
+  assert.match(examples.run.cli, /--descriptor-json '\{"schemaVersion"/);
+  assert.doesNotMatch(examples.run.cli, /--descriptor \{/);
+});
+
 test("CLI and MCP expose the same compact list, guide, explain, and inspect examples", async () => {
   const root = await createWorkspace({
     recommendations: {

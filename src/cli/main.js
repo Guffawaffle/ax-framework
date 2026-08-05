@@ -502,6 +502,7 @@ async function inspectCommand(
   }
   printMetadataField("warnings", cap.warnings);
   printMetadataField("details", cap.details);
+  printMetadataField("completion", cap.completion);
   if (
     resolved.injectedDefaults &&
     Object.keys(resolved.injectedDefaults).length > 0
@@ -614,6 +615,9 @@ async function runCommand(
       console.log(result.data);
     } else {
       console.log(JSON.stringify(result.data, null, 2));
+    }
+    if (result.continuations?.length > 0) {
+      console.log(`continuations: ${JSON.stringify(result.continuations, null, 2)}`);
     }
     return;
   }

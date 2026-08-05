@@ -62,6 +62,8 @@ Read only the references relevant to the contract you are changing:
    overrides, and drift.
 9. [Agent discovery and workflow](15-agent-discovery-and-workflow-guide.md) —
    caller-facing discovery and response contracts.
+10. [Awaitable completions](16-awaitable-completions.md) — typed continuation,
+    process-bound observation, cancellation, and provider boundaries.
 
 Then inspect the matching source and tests:
 

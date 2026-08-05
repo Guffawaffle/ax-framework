@@ -192,6 +192,7 @@ function compactInspect(base, payload) {
       "defaults",
       "policies",
       "outputModes",
+      "completion",
       "warnings",
       "details",
     ]);
@@ -211,6 +212,7 @@ function compactRun(base, payload) {
 
   if (payload.ok) {
     base.data = payload.data;
+    copyAgentValue(base, payload, "continuations");
     copyAgentValue(base, payload, "meta");
   } else {
     copyPresentValue(base, payload, "data");
@@ -257,6 +259,7 @@ function summarizeCapability(capability) {
     "scope",
     "lifecycleState",
     "sideEffects",
+    "completion",
     "sourceKind",
     "provider",
     "provenance",

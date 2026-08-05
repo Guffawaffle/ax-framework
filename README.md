@@ -441,6 +441,12 @@ See [Agent Discovery and Workflow Guide](docs/15-agent-discovery-and-workflow-gu
 for recommendation declarations, missing-capability diagnostics, and CLI/MCP
 examples.
 
+Capabilities may also return validated, typed continuations when their immediate result leaves an
+exact external operation in progress. The first continuation kind routes through
+`global.await.external`, whose process-bound GitHub provider observes explicit required checks for
+one exact commit SHA. See [Awaitable completions](docs/16-awaitable-completions.md) for descriptor,
+authority, cancellation, and outcome boundaries.
+
 When discovery and execution should use the same repo, set both
 `AXF_PROJECT_ROOT` and `AXF_EXECUTION_ROOT` to the same path. When they
 should differ, set them independently. Legacy `AXF_WORKSPACE` remains a
@@ -534,6 +540,7 @@ that pack as a runtime dependency.
 | Capability | Provider | Lifecycle | Notes |
 |---|---|---|---|
 | `global.echo.say` | internal | active | smallest in-process capability example |
+| `global.await.external` | await | active | process-bound observation of typed external completions; GitHub exact-head required checks are the first provider |
 
 Optional shared packs, including a Lex pack, can be added at machine or
 project scope. They route through the same resolver, lifecycle, policy,
@@ -615,6 +622,8 @@ Start with the path for your current job:
   repository or provider ceremony while preserving provider vocabulary.
 - [Framework author guide](docs/framework-authors.md) — change AXF internals
   and cross-surface contracts.
+- [Awaitable completions](docs/16-awaitable-completions.md) — return typed
+  continuations and observe exact external completion without scheduling it.
 
 [Documentation paths](docs/12-layered-docs.md) routes each audience to the
 relevant reference documents. Use the

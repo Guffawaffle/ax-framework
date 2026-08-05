@@ -69,6 +69,40 @@ export function capabilityDeclaresArgument(capability, name) {
   );
 }
 
+export function normalizeCapabilityOptionNames(capability, options = {}) {
+  const properties = capability?.argsSchema?.properties ?? {};
+  const publicNames = new Map();
+
+  for (const name of Object.keys(properties)) {
+    const publicName = toKebab(name);
+    const existing = publicNames.get(publicName);
+    if (existing && existing !== name) {
+      throw new AxError(
+        `capability '${capability.id}' has ambiguous CLI arguments '${existing}' and '${name}'`,
+        2,
+      );
+    }
+    publicNames.set(publicName, name);
+  }
+
+  const normalized = {};
+  const spellings = new Map();
+  for (const [providedName, value] of Object.entries(options)) {
+    const canonicalName = Object.hasOwn(properties, providedName)
+      ? providedName
+      : (publicNames.get(providedName) ?? providedName);
+    if (Object.hasOwn(normalized, canonicalName)) {
+      throw new AxError(
+        `capability argument '${canonicalName}' was provided as both '--${spellings.get(canonicalName)}' and '--${providedName}'`,
+        2,
+      );
+    }
+    normalized[canonicalName] = value;
+    spellings.set(canonicalName, providedName);
+  }
+  return normalized;
+}
+
 export function partitionRunOptions(
   capability,
   options = {},
@@ -160,4 +194,11 @@ export function partitionRunOptions(
   }
 
   return { capabilityArgs, controls };
+}
+
+function toKebab(name) {
+  return name
+    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
+    .replace(/_+/g, "-")
+    .toLowerCase();
 }

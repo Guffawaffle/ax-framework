@@ -183,6 +183,72 @@ test("run boundary keeps declared json and limit capability-owned", async () => 
   });
 });
 
+test("run accepts the kebab-case public flag emitted by inspect", async () => {
+  const root = await bootstrap();
+  await writeCap(
+    root,
+    basicCap({
+      lifecycleState: "active",
+      argsSchema: {
+        type: "object",
+        properties: { durationMs: { type: "integer" } },
+        required: ["durationMs"],
+        additionalProperties: false,
+      },
+    }),
+  );
+
+  const output = JSON.parse(
+    await captureStdout(() =>
+      main([
+        "--workspace",
+        root,
+        "run",
+        "demo",
+        "thing",
+        "--",
+        "--duration-ms",
+        "1000",
+      ]),
+    ),
+  );
+
+  assert.deepEqual(output, { durationMs: 1000 });
+});
+
+test("run rejects duplicate exact and public spellings of one argument", async () => {
+  const root = await bootstrap();
+  await writeCap(
+    root,
+    basicCap({
+      lifecycleState: "active",
+      argsSchema: {
+        type: "object",
+        properties: { durationMs: { type: "integer" } },
+        required: ["durationMs"],
+        additionalProperties: false,
+      },
+    }),
+  );
+
+  await assert.rejects(
+    () =>
+      main([
+        "--workspace",
+        root,
+        "run",
+        "demo",
+        "thing",
+        "--",
+        "--durationMs",
+        "1000",
+        "--duration-ms",
+        "1000",
+      ]),
+    /provided as both '--durationMs' and '--duration-ms'/,
+  );
+});
+
 test("declared legacy run names stay downstream without a boundary", async () => {
   const root = await bootstrap();
   await writeCap(

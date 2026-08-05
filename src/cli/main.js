@@ -31,6 +31,7 @@ import {
 import { integrateCodex } from "../core/codex-integration.js";
 import {
   AXF_ROOT_OPTIONS,
+  normalizeCapabilityOptionNames,
   partitionRunOptions,
 } from "../core/framework-options.js";
 
@@ -597,9 +598,13 @@ async function runCommand(
     frameworkOptions,
     { explicitBoundary: hasBoundary },
   );
-  const capabilityArgs = hasBoundary
+  const rawCapabilityArgs = hasBoundary
     ? boundaryOptions
     : partitioned.capabilityArgs;
+  const capabilityArgs = normalizeCapabilityOptionNames(
+    capability,
+    rawCapabilityArgs,
+  );
   const { controls } = partitioned;
   if (controls.usedLegacyAllowDraft) {
     warnIfDeprecatedAllowDraft({ "allow-draft": true });

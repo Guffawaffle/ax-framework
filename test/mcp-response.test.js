@@ -116,7 +116,7 @@ const operationPayloads = [
       completion: {
         mode: "external-awaitable",
         descriptorSchema: "axf/awaitable/v1",
-        observer: "global.await.external",
+        observer: "global.wait.external",
       },
       warnings: ["Inspect before execution"],
       details: { report: "generated-report.json" },
@@ -180,10 +180,10 @@ test("run profiles preserve data while removing successful execution traces", ()
   const data = { answer: [1, 2, 3] };
   const continuations = [
     {
-      kind: "await-external",
+      kind: "wait-external",
       recommended: true,
       reason: "Checks remain externally owned.",
-      capability: "global.await.external",
+      capability: "global.wait.external",
       args: {
         descriptor: {
           schemaVersion: "axf/awaitable/v1",

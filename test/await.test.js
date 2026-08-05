@@ -21,7 +21,7 @@ test("completion manifests declare one exact observer contract", () => {
     completion: {
       mode: "external-awaitable",
       descriptorSchema: AWAITABLE_SCHEMA_VERSION,
-      observer: "global.await.external",
+      observer: "global.wait.external",
     },
   });
 
@@ -45,14 +45,14 @@ test("typed continuations remain suggested invocations bound to the manifest obs
     completion: {
       mode: "external-awaitable",
       descriptorSchema: AWAITABLE_SCHEMA_VERSION,
-      observer: "global.await.external",
+      observer: "global.wait.external",
     },
   });
   const continuation = {
-    kind: "await-external",
+    kind: "wait-external",
     recommended: true,
     reason: "Required checks are externally owned.",
-    capability: "global.await.external",
+    capability: "global.wait.external",
     args: {
       descriptor: githubDescriptor(),
       deadlineMs: 30_000,
@@ -79,6 +79,25 @@ test("typed continuations remain suggested invocations bound to the manifest obs
         completion: undefined,
       }),
     /without a valid completion contract/,
+  );
+
+  const legacy = {
+    ...continuation,
+    kind: "await-external",
+    capability: "global.await.external",
+  };
+  assert.equal(
+    validateExecutionContinuations(
+      { ok: true, continuations: [legacy] },
+      {
+        ...capability,
+        completion: {
+          ...capability.completion,
+          observer: "global.await.external",
+        },
+      },
+    ).continuations[0],
+    legacy,
   );
 });
 
@@ -128,7 +147,7 @@ test("family commands preserve completion metadata when synthesized", () => {
           completion: {
             mode: "external-awaitable",
             descriptorSchema: AWAITABLE_SCHEMA_VERSION,
-            observer: "global.await.external",
+            observer: "global.wait.external",
           },
         },
       },
@@ -136,7 +155,7 @@ test("family commands preserve completion metadata when synthesized", () => {
     { existingIds: new Set() },
   );
 
-  assert.equal(capability.completion.observer, "global.await.external");
+  assert.equal(capability.completion.observer, "global.wait.external");
   assert.deepEqual(validateCapabilityManifest(capability, "family fixture"), []);
 });
 
@@ -559,7 +578,7 @@ function capabilityManifest(overrides = {}) {
 function resolvedAwaitCapability() {
   return {
     capability: {
-      id: "global.await.external",
+      id: "global.wait.external",
       sourceCapabilityId: null,
     },
   };

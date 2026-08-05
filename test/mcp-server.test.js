@@ -18,7 +18,7 @@ test("tools/list advertises exactly one tool named axf", async () => {
   assert.equal(response.tools[0].name, "axf");
   assert.equal(
     response.tools[0].description,
-    "AXF capability router. Use this single MCP tool to guide, list, explain, inspect, and run AXF capabilities. Capabilities such as global.echo.say are not separate MCP tools. Prefer guide for bounded workflow entrypoints or list with compact/search for discovery. Always inspect before run, and use projectRoot/executionRoot when discovery and execution roots differ.",
+    "AXF capability router. Use this single MCP tool to guide, list, explain, inspect, and run AXF capabilities. Capabilities such as global.echo.say are not separate MCP tools. Prefer guide for bounded workflow entrypoints or list with compact/search for discovery. For known external delays, prefer one global.wait.timed invocation over repeated agent status checks; use global.wait.external when an exact typed observer exists. Always inspect before run, and use projectRoot/executionRoot when discovery and execution roots differ.",
   );
   assert.deepEqual(response.tools[0].inputSchema.properties.operation.enum, [
     "help",
@@ -303,7 +303,7 @@ test("persistent MCP server remains responsive and cancels a process-bound Await
           arguments: {
             operation: "run",
             workspace: repoRoot,
-            target: { id: "global.await.external" },
+            target: { id: "global.wait.external" },
             args: {
               descriptor: {
                 schemaVersion: "axf/awaitable/v1",
@@ -386,9 +386,9 @@ test("agent follows a producer continuation through the single MCP router", asyn
     assert.equal(producerResult.continuations.length, 1);
 
     const continuation = producerResult.continuations[0];
-    assert.equal(continuation.kind, "await-external");
+    assert.equal(continuation.kind, "wait-external");
     assert.equal(continuation.recommended, true);
-    assert.equal(continuation.capability, "global.await.external");
+    assert.equal(continuation.capability, "global.wait.external");
 
     const inspected = await session.send({
       jsonrpc: "2.0",
@@ -406,7 +406,7 @@ test("agent follows a producer continuation through the single MCP router", asyn
     assert.equal(inspected.result.structuredContent.ok, true);
     assert.equal(
       inspected.result.structuredContent.capability.id,
-      "global.await.external",
+      "global.wait.external",
     );
     assert.equal(inspected.result.structuredContent.capability.sideEffects, "network");
 

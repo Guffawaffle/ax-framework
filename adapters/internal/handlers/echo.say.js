@@ -14,10 +14,10 @@ export default function echoSay(args, resolved) {
   if (args.await) {
     result.continuations = [
       {
-        kind: "await-external",
+        kind: "wait-external",
         recommended: true,
         reason: "Echo completed; observe the declared external condition.",
-        capability: "global.await.external",
+        capability: "global.wait.external",
         args: args.await,
       },
     ];

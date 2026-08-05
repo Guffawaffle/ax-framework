@@ -63,9 +63,11 @@ A successful capability may include top-level `continuations` when its inspected
 it is not authorization to invoke the observer. Reinspect the named capability and apply the same
 effect, policy, identity, and authority checks before running it.
 
-The first supported kind, `await-external`, routes through `global.await.external`. It observes an
+The canonical continuation kind, `wait-external`, routes through `global.wait.external`. It observes an
 exact external subject until a finite deadline without launching, retrying, approving, or cancelling
-the underlying work. See [Awaitable completions](16-awaitable-completions.md).
+the underlying work. Published 2.0.0 callers may still send the deprecated `await-external` kind to
+the `global.await.external` compatibility capability. See
+[Awaitable completions](16-awaitable-completions.md).
 
 ## The vocabulary you need
 

@@ -2,9 +2,12 @@ import { AxError } from "../../src/core/errors.js";
 import awaitExternal from "./handlers/await.external.js";
 import echoSay from "./handlers/echo.say.js";
 import draftTodo from "./handlers/draft.todo.js";
+import waitTimed from "./handlers/wait.timed.js";
 
 const HANDLERS = {
     "await.external": awaitExternal,
+    "wait.external": awaitExternal,
+    "wait.timed": waitTimed,
     "echo.say": echoSay,
     "draft.todo": draftTodo
 };

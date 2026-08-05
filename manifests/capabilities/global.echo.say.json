@@ -64,7 +64,7 @@
   "completion": {
     "mode": "external-awaitable",
     "descriptorSchema": "axf/awaitable/v1",
-    "observer": "global.await.external"
+    "observer": "global.wait.external"
   },
   "examples": [
     "axf run echo say --message hello"

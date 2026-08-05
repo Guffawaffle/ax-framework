@@ -1,9 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { fileURLToPath } from "node:url";
 import { performOperation } from "../src/mcp/operations.js";
 import { projectMcpResponse } from "../src/mcp/response.js";
 
-const repoRoot = new URL("..", import.meta.url).pathname;
+const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
 const root = {
   root: repoRoot,

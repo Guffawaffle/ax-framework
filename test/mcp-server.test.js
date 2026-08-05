@@ -1,13 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { once } from "node:events";
 import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { AXFMCPServer } from "../src/mcp/server.js";
 
-const repoRoot = new URL("..", import.meta.url).pathname;
+const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
 test("tools/list advertises exactly one tool named axf", async () => {
   const server = new AXFMCPServer({ cwd: repoRoot, env: process.env });
@@ -344,6 +344,94 @@ test("persistent MCP server remains responsive and cancels a process-bound Await
   }
 });
 
+test("agent follows a producer continuation through the single MCP router", async () => {
+  const session = await startPersistentStdioServer(
+    [path.join(repoRoot, "bin", "axf-mcp.js")],
+    {
+      cwd: repoRoot,
+      workspace: repoRoot,
+      env: { AXF_AWAIT_ENABLE_TEST_PROVIDERS: "1" },
+    },
+  );
+
+  try {
+    await session.send(initializeRequest(1));
+    const produced = await session.send({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: {
+        name: "axf",
+        arguments: {
+          operation: "run",
+          workspace: repoRoot,
+          target: { id: "global.echo.say" },
+          args: {
+            message: "producer complete",
+            await: {
+              descriptor: {
+                schemaVersion: "axf/awaitable/v1",
+                kind: "test.timer",
+                subject: { readyAfterObservations: 3 },
+                condition: { type: "observation-count" },
+              },
+              deadlineMs: 5_000,
+            },
+          },
+        },
+      },
+    });
+    const producerResult = produced.result.structuredContent;
+    assert.equal(producerResult.data, "producer complete");
+    assert.equal(producerResult.continuations.length, 1);
+
+    const continuation = producerResult.continuations[0];
+    assert.equal(continuation.kind, "await-external");
+    assert.equal(continuation.recommended, true);
+    assert.equal(continuation.capability, "global.await.external");
+
+    const inspected = await session.send({
+      jsonrpc: "2.0",
+      id: 3,
+      method: "tools/call",
+      params: {
+        name: "axf",
+        arguments: {
+          operation: "inspect",
+          workspace: repoRoot,
+          target: { id: continuation.capability },
+        },
+      },
+    });
+    assert.equal(inspected.result.structuredContent.ok, true);
+    assert.equal(
+      inspected.result.structuredContent.capability.id,
+      "global.await.external",
+    );
+    assert.equal(inspected.result.structuredContent.capability.sideEffects, "network");
+
+    const awaited = await session.send({
+      jsonrpc: "2.0",
+      id: 4,
+      method: "tools/call",
+      params: {
+        name: "axf",
+        arguments: {
+          operation: "run",
+          workspace: repoRoot,
+          target: { id: continuation.capability },
+          args: continuation.args,
+        },
+      },
+    });
+    assert.equal(awaited.result.isError, false);
+    assert.equal(awaited.result.structuredContent.data.outcome, "satisfied");
+    assert.equal(awaited.result.structuredContent.data.observationCount, 3);
+  } finally {
+    await session.stop();
+  }
+});
+
 async function requestStdioServer(args, requests, options = {}) {
   const encode = options.encodeMessage ?? encodeLineMessage;
   const proc = spawn(process.execPath, args, {
@@ -365,7 +453,7 @@ async function requestStdioServer(args, requests, options = {}) {
     stderr += chunk;
   });
 
-  const closePromise = once(proc, "close");
+  const closePromise = waitForClose(proc);
   const responsePromise = new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       reject(
@@ -403,18 +491,22 @@ async function requestStdioServer(args, requests, options = {}) {
         );
       }
     });
+    proc.on("error", (error) => {
+      clearTimeout(timeout);
+      reject(error);
+    });
   });
 
   for (const request of requests) {
     proc.stdin.write(encode(request));
   }
 
-  const result = await responsePromise;
-
-  proc.kill("SIGTERM");
-  await closePromise;
-
-  return result;
+  try {
+    return await responsePromise;
+  } finally {
+    if (proc.exitCode === null) proc.kill("SIGTERM");
+    await closePromise;
+  }
 }
 
 async function startPersistentStdioServer(args, options = {}) {
@@ -431,6 +523,7 @@ async function startPersistentStdioServer(args, options = {}) {
   let stderr = "";
   let stdout = "";
   const pending = new Map();
+  const closePromise = waitForClose(proc);
 
   proc.stderr.setEncoding("utf8");
   proc.stderr.on("data", (chunk) => {
@@ -467,6 +560,13 @@ async function startPersistentStdioServer(args, options = {}) {
       pending.delete(id);
     }
   });
+  proc.on("error", (error) => {
+    for (const [id, waiter] of pending.entries()) {
+      clearTimeout(waiter.timeout);
+      waiter.reject(error);
+      pending.delete(id);
+    }
+  });
 
   return {
     send(request, sendOptions = {}) {
@@ -494,11 +594,16 @@ async function startPersistentStdioServer(args, options = {}) {
       return stdout;
     },
     async stop() {
-      const closePromise = once(proc, "close");
-      proc.kill("SIGTERM");
+      if (proc.exitCode === null) proc.kill("SIGTERM");
       await closePromise;
     },
   };
+}
+
+function waitForClose(proc) {
+  return new Promise((resolve) => {
+    proc.once("close", (code, signal) => resolve({ code, signal }));
+  });
 }
 
 function initializeRequest(id) {

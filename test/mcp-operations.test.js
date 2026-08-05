@@ -3,9 +3,10 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { performOperation } from "../src/mcp/operations.js";
 
-const repoRoot = new URL("..", import.meta.url).pathname;
+const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
 async function tempAxfRoot(prefix) {
   const root = await mkdtemp(path.join(os.tmpdir(), prefix));

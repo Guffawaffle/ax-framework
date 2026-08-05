@@ -12,6 +12,7 @@ import {
   splitRunTokens,
 } from "./options.js";
 import { AxError } from "../core/errors.js";
+import { toPortablePath } from "../core/path-model.js";
 import { resolveCliLaunchPlan } from "../core/cli-launch-plan.js";
 import { prepareCommandInvocation } from "../core/command-invocation.js";
 import { scoutWorkspace } from "../core/scout.js";
@@ -48,6 +49,10 @@ const COMMANDS = new Set([
   "mcp",
   "help",
 ]);
+
+function relativeDisplayPath(rootDir, targetPath) {
+  return toPortablePath(path.relative(rootDir, targetPath));
+}
 
 export async function main(argv, env = {}) {
   const cwd = env.cwd ?? process.cwd();
@@ -163,7 +168,15 @@ export async function main(argv, env = {}) {
   }
   if (command === "doctor") {
     const adapters = await loadAdapters({ rootDir });
-    await doctorCommand(registry, adapters, rest, workspaces, processEnv, cwd);
+    await doctorCommand(
+      registry,
+      adapters,
+      rest,
+      workspaces,
+      processEnv,
+      cwd,
+      env.platform ?? process.platform,
+    );
   }
 }
 
@@ -690,7 +703,7 @@ async function initFamily(rootDir, name) {
     },
   };
   await writeJsonFile(filePath, manifest);
-  console.log(`created draft family: ${path.relative(rootDir, filePath)}`);
+  console.log(`created draft family: ${relativeDisplayPath(rootDir, filePath)}`);
 }
 
 async function initMaterialize(rootDir, args) {
@@ -713,7 +726,7 @@ async function initMaterialize(rootDir, args) {
     family = JSON.parse(await readFile(familyPath, "utf8"));
   } catch (error) {
     throw new AxError(
-      `cannot read family manifest at ${path.relative(rootDir, familyPath)}: ${error.message}`,
+      `cannot read family manifest at ${relativeDisplayPath(rootDir, familyPath)}: ${error.message}`,
       2,
     );
   }
@@ -764,7 +777,7 @@ async function initMaterialize(rootDir, args) {
     sourceFamily: {
       family: family.family,
       command: commandKey,
-      manifestPath: path.relative(rootDir, familyPath),
+      manifestPath: relativeDisplayPath(rootDir, familyPath),
     },
   };
   if (cmd.providerAdapter ?? family.providerAdapter) {
@@ -773,7 +786,7 @@ async function initMaterialize(rootDir, args) {
   copyDescriptiveMetadata(manifest, cmd);
   await writeJsonFile(filePath, manifest);
   console.log(
-    `materialized ${familyName}.${commandKey} -> ${path.relative(rootDir, filePath)}`,
+    `materialized ${familyName}.${commandKey} -> ${relativeDisplayPath(rootDir, filePath)}`,
   );
 }
 
@@ -830,7 +843,7 @@ async function initToolspace(rootDir, name) {
   };
   await writeJsonFile(filePath, manifest);
   console.log(
-    `created draft toolspace mount: ${path.relative(rootDir, filePath)}`,
+    `created draft toolspace mount: ${relativeDisplayPath(rootDir, filePath)}`,
   );
 }
 
@@ -866,7 +879,7 @@ async function initCapability(rootDir, id) {
     owner: "draft",
   };
   await writeJsonFile(filePath, manifest);
-  console.log(`created draft capability: ${path.relative(rootDir, filePath)}`);
+  console.log(`created draft capability: ${relativeDisplayPath(rootDir, filePath)}`);
 }
 
 // init adapter <type>                                  -> draft global type-adapter under adapters/<type>/
@@ -932,7 +945,7 @@ export async function execute(resolved) {
   await writeFile(path.join(dir, "index.js"), indexJs, { flag: "wx" });
   const tsTag = toolspace ? `  (toolspace-private: ${toolspace})` : "";
   console.log(
-    `created draft type-adapter: ${path.relative(rootDir, dir)}/${tsTag}`,
+    `created draft type-adapter: ${relativeDisplayPath(rootDir, dir)}/${tsTag}`,
   );
 }
 
@@ -980,7 +993,7 @@ export async function execute(resolved, ctx) {
   await writeFile(path.join(dir, "index.js"), indexJs, { flag: "wx" });
   const tsTag = toolspace ? `  (toolspace-private: ${toolspace})` : "";
   console.log(
-    `created draft provider adapter: ${path.relative(rootDir, dir)}/  (composes ${composes})${tsTag}`,
+    `created draft provider adapter: ${relativeDisplayPath(rootDir, dir)}/  (composes ${composes})${tsTag}`,
   );
 }
 
@@ -991,6 +1004,7 @@ async function doctorCommand(
   workspaces = null,
   env = process.env,
   cwd = process.cwd(),
+  platform = process.platform,
 ) {
   const parsed = parseOptionTokens(tokens);
   const runtimeDiagnostics = collectRuntimeDiagnostics(registry, {
@@ -998,7 +1012,7 @@ async function doctorCommand(
     executionWorkspace: workspaces?.executionWorkspace ?? null,
     env,
     cwd,
-    platform: process.platform,
+    platform,
   });
   const report = inspectRegistry(registry, {
     adapters,

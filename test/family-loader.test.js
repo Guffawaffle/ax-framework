@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { createRegistry } from "../src/core/registry.js";
 import {
   deriveFlag,
@@ -14,7 +15,7 @@ import { evaluatePolicies } from "../src/core/policy.js";
 import { main } from "../src/cli/main.js";
 import { validateCapabilityManifest } from "../src/core/manifest-validator.js";
 
-const REPO_ROOT = new URL("..", import.meta.url).pathname;
+const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 async function bootstrap() {
   const root = await mkdtemp(path.join(os.tmpdir(), "axf-fam-"));

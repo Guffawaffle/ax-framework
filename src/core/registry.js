@@ -2,7 +2,7 @@ import { readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { AxError, UnknownCapabilityError } from "./errors.js";
-import { parseCapabilityInput } from "./path-model.js";
+import { parseCapabilityInput, toPortablePath } from "./path-model.js";
 import { synthesizeMountedCapability } from "./resolver.js";
 import {
   validateCapabilityManifest,
@@ -82,7 +82,8 @@ function compareLayers(left, right) {
 }
 
 function formatLayerPath(relativePath, layer) {
-  return layer === "project" ? relativePath : `${layer}:${relativePath}`;
+  const portablePath = toPortablePath(relativePath);
+  return layer === "project" ? portablePath : `${layer}:${portablePath}`;
 }
 
 function familyKey(family) {

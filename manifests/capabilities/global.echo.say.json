@@ -15,6 +15,39 @@
       },
       "prefix": {
         "type": "string"
+      },
+      "await": {
+        "type": "object",
+        "properties": {
+          "descriptor": {
+            "type": "object",
+            "properties": {
+              "schemaVersion": {
+                "type": "string",
+                "enum": ["axf/awaitable/v1"]
+              },
+              "kind": {
+                "type": "string",
+                "minLength": 3
+              },
+              "subject": {
+                "type": "object"
+              },
+              "condition": {
+                "type": "object"
+              }
+            },
+            "required": ["schemaVersion", "kind", "subject", "condition"],
+            "additionalProperties": false
+          },
+          "deadlineMs": {
+            "type": "integer",
+            "minimum": 1000,
+            "maximum": 1800000
+          }
+        },
+        "required": ["descriptor", "deadlineMs"],
+        "additionalProperties": false
       }
     }
   },
@@ -28,6 +61,11 @@
   "defaults": {},
   "policies": [],
   "owner": "module:echo",
+  "completion": {
+    "mode": "external-awaitable",
+    "descriptorSchema": "axf/awaitable/v1",
+    "observer": "global.await.external"
+  },
   "examples": [
     "axf run echo say --message hello"
   ]

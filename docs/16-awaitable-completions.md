@@ -88,6 +88,11 @@ producer's manifest, but the later `run` resolves the observer again and re-appl
 policy, provider identity, arguments, and current host authority. Descriptors containing credential
 or token fields are rejected.
 
+The built-in `global.echo.say` capability accepts an optional `await` argument only as a harmless
+producer-plumbing fixture. It returns that validated argument as an `await-external` continuation
+without creating external work. Real integrations should return continuations from the capability
+that actually initiated or identified the externally owned operation.
+
 ## Await invocation
 
 Await remains a capability behind AXF's one MCP tool:

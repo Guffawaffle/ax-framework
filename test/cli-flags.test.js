@@ -628,6 +628,7 @@ test("doctor --json surfaces WSL path contamination diagnostics", async () => {
     const out = await captureStdout(() =>
       main(["--workspace", root, "doctor", "--json"], {
         cwd: root,
+        platform: "linux",
         env: {
           ...process.env,
           PATH: "/mnt/c/Users/dev/AppData/Roaming/npm:/mnt/c/Program Files/nodejs:/usr/bin",

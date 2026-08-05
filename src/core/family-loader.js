@@ -31,6 +31,7 @@ import {
   AXF_OPTION_PREFIX,
   isFrameworkReservedArgName,
 } from "./framework-options.js";
+import { toPortablePath } from "./path-model.js";
 
 const SUPPORTED_FAMILY_VERSIONS = new Set(["axf/v0"]);
 const SUPPORTED_ARG_STYLES = new Set([
@@ -63,7 +64,7 @@ export async function loadFamilies({ familiesRoot, rootDir }) {
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith(".family.json")) continue;
     const filePath = path.join(familiesRoot, entry.name);
-    const relativePath = path.relative(rootDir, filePath);
+    const relativePath = toPortablePath(path.relative(rootDir, filePath));
     let manifest;
     try {
       manifest = JSON.parse(await readFile(filePath, "utf8"));

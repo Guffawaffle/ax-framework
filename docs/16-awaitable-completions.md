@@ -169,6 +169,36 @@ Missing and in-progress checks are pending, not successful. Evidence contains on
 subject and requested normalized check states; provider response bodies and credentials are not
 returned.
 
+## GitHub pull-request-review provider
+
+`github.pull-request-review` observes one explicit reviewer on one exact pull request head:
+
+```json
+{
+  "schemaVersion": "axf/awaitable/v1",
+  "kind": "github.pull-request-review",
+  "subject": {
+    "repository": "owner/repository",
+    "pullRequestNumber": 42,
+    "headSha": "0123456789abcdef0123456789abcdef01234567"
+  },
+  "condition": {
+    "type": "review-submitted",
+    "reviewer": {
+      "login": "copilot-pull-request-reviewer[bot]",
+      "type": "Bot"
+    }
+  }
+}
+```
+
+Both reviewer fields are mandatory. A matching `COMMENTED`, `APPROVED`, or
+`CHANGES_REQUESTED` review for the exact head satisfies the condition. A matching dismissed review
+is terminal-failed; a missing or pending review remains pending. AXF checks the pull request head
+before observation and again before returning a terminal result, so a force-push or new commit is
+reported as `subject-drift` rather than as completion. Evidence is limited to the exact subject,
+reviewer identity, review ID, state, commit ID, and submission timestamp.
+
 Bundled and future providers implement one short observation, not their own poll loop. They must
 honor the supplied `AbortSignal`, return only the closed provider-observation fields, and keep
 normalized evidence within 32 KiB. AXF owns polling, the semantic deadline, and projection into the

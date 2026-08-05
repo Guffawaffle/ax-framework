@@ -5,6 +5,7 @@ import {
   AWAIT_RESULT_SCHEMA_VERSION,
 } from "../core/awaitable.js";
 import { observeGithubRequiredChecks } from "./providers/github-required-checks.js";
+import { observeGithubPullRequestReview } from "./providers/github-pull-request-review.js";
 import { observeTimerFixture } from "./providers/timer-fixture.js";
 
 const DEFAULT_POLL_MS = 5_000;
@@ -176,6 +177,9 @@ function resolveDescriptor(args) {
 }
 
 function resolveBackend(kind, env) {
+  if (kind === "github.pull-request-review") {
+    return observeGithubPullRequestReview;
+  }
   if (kind === "github.required-checks") {
     return observeGithubRequiredChecks;
   }

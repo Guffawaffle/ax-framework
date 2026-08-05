@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { observeGithubRequiredChecks } from "../src/await/providers/github-required-checks.js";
+import { observeGithubPullRequestReview } from "../src/await/providers/github-pull-request-review.js";
 import {
   runAwaitExternal,
   validateAwaitObservation,
@@ -202,6 +203,60 @@ test("GitHub Await distinguishes satisfied, failed, pending, and exact PR head d
   assert.equal(drift.evidence.observedHeadSha, "f".repeat(40));
 });
 
+test("GitHub review Await binds completion to the exact head and reviewer identity", async () => {
+  const satisfied = await observeGithubPullRequestReview(githubReviewDescriptor(), {
+    env: { GH_TOKEN: "test-token" },
+    fetch: githubReviewFetch(),
+  });
+  assert.equal(satisfied.outcome, "satisfied");
+  assert.deepEqual(satisfied.evidence.reviewer, {
+    login: "copilot-pull-request-reviewer[bot]",
+    type: "Bot",
+  });
+  assert.equal(satisfied.evidence.review.state, "COMMENTED");
+  assert.equal(satisfied.evidence.review.commitId, headSha);
+
+  const pending = await observeGithubPullRequestReview(githubReviewDescriptor(), {
+    env: { GH_TOKEN: "test-token" },
+    fetch: githubReviewFetch({ reviewerLogin: "someone-else[bot]" }),
+  });
+  assert.equal(pending.outcome, "pending");
+  assert.equal(pending.evidence.review, null);
+
+  const wrongHead = await observeGithubPullRequestReview(githubReviewDescriptor(), {
+    env: { GH_TOKEN: "test-token" },
+    fetch: githubReviewFetch({ reviewCommitId: "e".repeat(40) }),
+  });
+  assert.equal(wrongHead.outcome, "pending");
+
+  const dismissed = await observeGithubPullRequestReview(githubReviewDescriptor(), {
+    env: { GH_TOKEN: "test-token" },
+    fetch: githubReviewFetch({ state: "DISMISSED" }),
+  });
+  assert.equal(dismissed.outcome, "terminal-failed");
+});
+
+test("GitHub review Await detects head drift and rejects implicit reviewer identities", async () => {
+  const drift = await observeGithubPullRequestReview(githubReviewDescriptor(), {
+    env: { GH_TOKEN: "test-token" },
+    fetch: githubReviewFetch({ pullHeadSha: "f".repeat(40) }),
+  });
+  assert.equal(drift.outcome, "subject-drift");
+  assert.equal(drift.evidence.expectedHeadSha, headSha);
+  assert.equal(drift.evidence.observedHeadSha, "f".repeat(40));
+
+  const descriptor = githubReviewDescriptor();
+  delete descriptor.condition.reviewer.type;
+  await assert.rejects(
+    () =>
+      observeGithubPullRequestReview(descriptor, {
+        env: { GH_TOKEN: "test-token" },
+        fetch: githubReviewFetch(),
+      }),
+    /reviewer\.type must be 'Bot' or 'User'/,
+  );
+});
+
 test("GitHub Await uses the newest commit status for an explicit context", async () => {
   const descriptor = githubDescriptor();
   descriptor.condition.requiredChecks = [
@@ -384,6 +439,58 @@ function githubDescriptor(subject = {}) {
         { source: "check-run", name: "macOS" },
       ],
     },
+  };
+}
+
+function githubReviewDescriptor() {
+  return {
+    schemaVersion: AWAITABLE_SCHEMA_VERSION,
+    kind: "github.pull-request-review",
+    subject: {
+      repository: "owner/repository",
+      pullRequestNumber: 42,
+      headSha,
+    },
+    condition: {
+      type: "review-submitted",
+      reviewer: {
+        login: "copilot-pull-request-reviewer[bot]",
+        type: "Bot",
+      },
+    },
+  };
+}
+
+function githubReviewFetch({
+  pullHeadSha = headSha,
+  reviewCommitId = headSha,
+  reviewerLogin = "copilot-pull-request-reviewer[bot]",
+  reviewerType = "Bot",
+  state = "COMMENTED",
+} = {}) {
+  return async (url) => {
+    let body;
+    if (url.includes("/reviews")) {
+      body = [
+        {
+          id: 123,
+          state,
+          commit_id: reviewCommitId,
+          submitted_at: "2026-08-05T07:33:42Z",
+          user: { login: reviewerLogin, type: reviewerType },
+        },
+      ];
+    } else if (url.includes("/pulls/")) {
+      body = { head: { sha: pullHeadSha } };
+    } else {
+      throw new Error(`unexpected GitHub URL: ${url}`);
+    }
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      text: async () => JSON.stringify(body),
+    };
   };
 }
 

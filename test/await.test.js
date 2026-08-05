@@ -7,6 +7,7 @@ import {
 } from "../src/await/index.js";
 import {
   AWAITABLE_SCHEMA_VERSION,
+  assertAwaitableDescriptor,
   validateExecutionContinuations,
 } from "../src/core/awaitable.js";
 import { validateCapabilityManifest } from "../src/core/manifest-validator.js";
@@ -78,6 +79,34 @@ test("typed continuations remain suggested invocations bound to the manifest obs
       }),
     /without a valid completion contract/,
   );
+});
+
+test("awaitable descriptors distinguish authorship metadata from authority", () => {
+  const descriptor = githubDescriptor();
+  descriptor.subject.author = "octocat";
+  descriptor.subject.authorship = { source: "commit" };
+  descriptor.condition.tokenCount = 12;
+  descriptor.condition.secretary = "operations";
+
+  assert.equal(assertAwaitableDescriptor(descriptor), descriptor);
+
+  for (const field of [
+    "auth",
+    "authorizationHeader",
+    "credentials",
+    "accessToken",
+    "private_key",
+    "client-secret",
+    "apiKey",
+  ]) {
+    const invalid = githubDescriptor();
+    invalid.subject.metadata = { [field]: "must-not-travel" };
+    assert.throws(
+      () => assertAwaitableDescriptor(invalid),
+      /must not contain credentials or bearer authority/,
+      field,
+    );
+  }
 });
 
 test("family commands preserve completion metadata when synthesized", () => {

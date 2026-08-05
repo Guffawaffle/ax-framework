@@ -31,8 +31,30 @@ const CONTINUATION_FIELDS = new Set([
   "args",
 ]);
 const CONTINUATION_ARG_FIELDS = new Set(["descriptor", "deadlineMs"]);
-const AUTHORITY_FIELD =
-  /(auth|authorization|bearer|credential|password|privatekey|secret|token)/i;
+const AUTHORITY_FIELD_NAMES = new Set([
+  "auth",
+  "authorization",
+  "authorizationheader",
+  "bearer",
+  "bearertoken",
+  "credential",
+  "credentials",
+  "password",
+  "privatekey",
+  "secret",
+  "secrets",
+  "token",
+]);
+const AUTHORITY_FIELD_SUFFIXES = Object.freeze([
+  "apikey",
+  "accesskey",
+  "credential",
+  "credentials",
+  "password",
+  "privatekey",
+  "secret",
+  "token",
+]);
 
 export function validateCompletionContract(completion, label) {
   if (!isRecord(completion)) {
@@ -246,9 +268,17 @@ function containsAuthorityField(value) {
     }
     if (!isRecord(current)) continue;
     for (const [field, nested] of Object.entries(current)) {
-      if (AUTHORITY_FIELD.test(field)) return true;
+      if (isAuthorityField(field)) return true;
       pending.push(nested);
     }
   }
   return false;
+}
+
+function isAuthorityField(field) {
+  const normalized = field.replace(/[^a-z0-9]/giu, "").toLowerCase();
+  return (
+    AUTHORITY_FIELD_NAMES.has(normalized) ||
+    AUTHORITY_FIELD_SUFFIXES.some((suffix) => normalized.endsWith(suffix))
+  );
 }

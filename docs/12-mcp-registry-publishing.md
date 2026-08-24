@@ -41,6 +41,17 @@ https://registry.modelcontextprotocol.io/v0.1/servers/dev.smartergpt%2Faxf/versi
 
 The non-versioned `/servers/dev.smartergpt/axf` URL is not the verification source of truth.
 
+## Relationship to the npm release lane
+
+`.github/workflows/release.yml` builds and retains the commit-bound npm tarball, publishes that
+exact tarball through npm trusted publishing for an authorized signed tag at the current `main`
+tip, verifies npm integrity, and attaches the tarball and receipt to the GitHub release.
+
+MCP Registry publication is deliberately separate and manual because the
+`dev.smartergpt/axf` namespace uses DNS-held authority. A green npm/GitHub release does not prove
+that the matching MCP Registry version exists. Run the DNS-auth recipe below and verify the
+versioned endpoint before reporting dual-registry publication.
+
 ## Safe DNS-auth recipe
 
 The following pattern verifies the public key against DNS, derives the

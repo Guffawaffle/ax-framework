@@ -9,6 +9,19 @@ import { AXFMCPServer } from "../src/mcp/server.js";
 
 const repoRoot = fileURLToPath(new URL("..", import.meta.url));
 
+test("stdio close observation settles a spawn error", async () => {
+  const proc = spawn(path.join(repoRoot, "missing-axf-test-executable.exe"), [], {
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+  const result = await Promise.race([
+    waitForClose(proc),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("spawn error did not settle")), 1000)),
+  ]);
+  assert.equal(result.code, null);
+  assert.equal(result.signal, null);
+  assert.equal(result.error?.code, "ENOENT");
+});
+
 test("tools/list advertises exactly one tool named axf", async () => {
   const server = new AXFMCPServer({ cwd: repoRoot, env: process.env });
   const response = await server.handleRequest({ method: "tools/list" });
@@ -602,7 +615,19 @@ async function startPersistentStdioServer(args, options = {}) {
 
 function waitForClose(proc) {
   return new Promise((resolve) => {
-    proc.once("close", (code, signal) => resolve({ code, signal }));
+    function settle(result) {
+      proc.off("close", onClose);
+      proc.off("error", onError);
+      resolve(result);
+    }
+    function onClose(code, signal) {
+      settle({ code, signal, error: null });
+    }
+    function onError(error) {
+      settle({ code: null, signal: null, error });
+    }
+    proc.once("close", onClose);
+    proc.once("error", onError);
   });
 }
 

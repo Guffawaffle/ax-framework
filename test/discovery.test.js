@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -459,6 +460,11 @@ test("inspect examples map public arguments through provider flags", () => {
     examples.run.cli,
     "axf run global.demo.check -- --project-root /repo",
   );
+  assert.equal(examples.run.cliShell, "powershell");
+  assert.deepEqual(examples.run.cliByShell, {
+    powershell: "axf run global.demo.check -- --project-root /repo",
+    posix: "axf run global.demo.check -- --project-root /repo",
+  });
   assert.deepEqual(examples.run.mcp.args, { projectRoot: "/repo" });
   assert.deepEqual(examples.argumentMapping[0], {
     publicName: "projectRoot",
@@ -473,8 +479,57 @@ test("inspect examples map public arguments through provider flags", () => {
   ]);
 });
 
+test("shell-specific examples preserve a Windows path argument", () => {
+  const examples = buildCapabilityExamples(
+    capability("global.demo.path", {
+      argsSchema: {
+        type: "object",
+        properties: {
+          projectRoot: { type: "string", example: "C:\\repo" },
+        },
+        required: ["projectRoot"],
+      },
+    }),
+  );
+
+  assert.match(examples.run.cliByShell.powershell, /--project-root C:\\repo$/);
+  assert.match(examples.run.cliByShell.posix, /--project-root 'C:\\repo'$/);
+
+  const powershellLiteral = examples.run.cliByShell.powershell.match(
+    /--project-root (.+)$/,
+  )?.[1];
+  const posixLiteral = examples.run.cliByShell.posix.match(
+    /--project-root (.+)$/,
+  )?.[1];
+  const powershell = spawnSync(
+    "pwsh",
+    [
+      "-NoLogo",
+      "-NoProfile",
+      "-Command",
+      "& { param([string]$value) [Console]::Out.Write($value) } " +
+        powershellLiteral,
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(powershell.error, undefined, powershell.error?.message);
+  assert.equal(powershell.status, 0, powershell.stderr);
+  assert.equal(powershell.stdout, "C:\\repo");
+
+  const posix = spawnSync("bash", ["-lc", "printf '%s' " + posixLiteral], {
+    encoding: "utf8",
+  });
+  assert.equal(posix.error, undefined, posix.error?.message);
+  assert.equal(posix.status, 0, posix.stderr);
+  assert.equal(posix.stdout, "C:\\repo");
+});
+
 test("inspect examples reuse declared run args for exclusive optional inputs", () => {
-  const descriptor = { schemaVersion: "axf/awaitable/v1", kind: "demo" };
+  const descriptor = {
+    schemaVersion: "axf/awaitable/v1",
+    kind: "demo",
+    subject: { label: "O'Brien" },
+  };
   const examples = buildCapabilityExamples(
     capability("global.demo.wait", {
       argsSchema: {
@@ -505,7 +560,42 @@ test("inspect examples reuse declared run args for exclusive optional inputs", (
     deadlineMs: 1800000,
   });
   assert.match(examples.run.cli, /--descriptor-json '\{"schemaVersion"/);
+  assert.equal(examples.run.cliShell, "powershell");
+  assert.equal(examples.run.cli.includes("O''Brien"), true);
+  assert.equal(examples.run.cliByShell.posix.includes("O'\\''Brien"), true);
   assert.doesNotMatch(examples.run.cli, /--descriptor \{/);
+
+  const expectedJson = JSON.stringify(descriptor);
+  const powershellLiteral = examples.run.cliByShell.powershell.match(
+    /--descriptor-json (.+) --deadline-ms/,
+  )?.[1];
+  const posixLiteral = examples.run.cliByShell.posix.match(
+    /--descriptor-json (.+) --deadline-ms/,
+  )?.[1];
+  assert.ok(powershellLiteral);
+  assert.ok(posixLiteral);
+
+  const powershell = spawnSync(
+    "pwsh",
+    [
+      "-NoLogo",
+      "-NoProfile",
+      "-Command",
+      "& { param([string]$value) [Console]::Out.Write($value) } " +
+        powershellLiteral,
+    ],
+    { encoding: "utf8" },
+  );
+  assert.equal(powershell.error, undefined, powershell.error?.message);
+  assert.equal(powershell.status, 0, powershell.stderr);
+  assert.equal(powershell.stdout, expectedJson);
+
+  const posix = spawnSync("bash", ["-lc", "printf '%s' " + posixLiteral], {
+    encoding: "utf8",
+  });
+  assert.equal(posix.error, undefined, posix.error?.message);
+  assert.equal(posix.status, 0, posix.stderr);
+  assert.equal(posix.stdout, expectedJson);
 });
 
 test("CLI and MCP expose the same compact list, guide, explain, and inspect examples", async () => {

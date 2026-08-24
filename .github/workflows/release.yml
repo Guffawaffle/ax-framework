@@ -1,0 +1,335 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Candidate version from package.json (for example, 2.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate-identity:
+    name: Validate release identity
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate package, ref, and main identity
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.ref_name }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+          TRUSTED_GPG_KEYS: ${{ secrets.TRUSTED_GPG_KEYS }}
+          TRUSTED_RELEASE_FINGERPRINTS: ${{ secrets.TRUSTED_RELEASE_FINGERPRINTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PACKAGE_VERSION=$(node -p "require('./package.json').version")
+          git fetch --no-tags origin main
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ "$GITHUB_REF" != "refs/heads/main" ] || [ "$GITHUB_SHA" != "$(git rev-parse origin/main)" ]; then
+              echo "Candidate dispatch must target the current origin/main tip"
+              exit 1
+            fi
+            if [[ ! "$REQUESTED_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || [ "$REQUESTED_VERSION" != "$PACKAGE_VERSION" ]; then
+              echo "Requested version does not exactly match package $PACKAGE_VERSION"
+              exit 1
+            fi
+            exit 0
+          fi
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || [ "$RELEASE_TAG" != "v$PACKAGE_VERSION" ]; then
+            echo "Tag $RELEASE_TAG does not exactly match package v$PACKAGE_VERSION"
+            exit 1
+          fi
+          if [ "$(git cat-file -t "refs/tags/$RELEASE_TAG")" != "tag" ]; then
+            echo "Release tag must be annotated"
+            exit 1
+          fi
+          TARGET=$(git rev-list -n 1 "$RELEASE_TAG")
+          if [ "$TARGET" != "$GITHUB_SHA" ] || [ "$TARGET" != "$(git rev-parse origin/main)" ]; then
+            echo "Release tag must target the exact current origin/main tip"
+            exit 1
+          fi
+          node scripts/verify-release-tag.mjs "$RELEASE_TAG" "$TARGET"
+          if [ -z "$TRUSTED_GPG_KEYS" ] || [ -z "$TRUSTED_RELEASE_FINGERPRINTS" ]; then
+            echo "TRUSTED_GPG_KEYS and TRUSTED_RELEASE_FINGERPRINTS are required"
+            exit 1
+          fi
+          echo "$TRUSTED_GPG_KEYS" | base64 -d | gpg --import
+          ALLOWED=$(printf '%s' "$TRUSTED_RELEASE_FINGERPRINTS" | tr ',;\r\n' '    ' | tr '[:lower:]' '[:upper:]')
+          TAG_VERIFY=$(git verify-tag --raw "$RELEASE_TAG" 2>&1)
+          printf '%s\n' "$TAG_VERIFY"
+          TAG_COUNT=$(printf '%s\n' "$TAG_VERIFY" | grep -c '\[GNUPG:\] VALIDSIG ')
+          TAG_FINGERPRINT=$(printf '%s\n' "$TAG_VERIFY" | awk '$2 == "VALIDSIG" { print toupper($3); exit }')
+          COMMIT_VERIFY=$(git verify-commit --raw "$TARGET" 2>&1)
+          printf '%s\n' "$COMMIT_VERIFY"
+          COMMIT_COUNT=$(printf '%s\n' "$COMMIT_VERIFY" | grep -c '\[GNUPG:\] VALIDSIG ')
+          COMMIT_FINGERPRINT=$(printf '%s\n' "$COMMIT_VERIFY" | awk '$2 == "VALIDSIG" { print toupper($3); exit }')
+          if [ "$TAG_COUNT" -ne 1 ] || [ "$COMMIT_COUNT" -ne 1 ] || [[ ! "$TAG_FINGERPRINT" =~ ^[0-9A-F]{40}$ ]] || [[ ! "$COMMIT_FINGERPRINT" =~ ^[0-9A-F]{40}$ ]]; then
+            echo "Release tag and target commit must each have exactly one valid signature"
+            exit 1
+          fi
+          case " $ALLOWED " in
+            *" $TAG_FINGERPRINT "*) ;;
+            *) echo "Tag signer fingerprint is not authorized"; exit 1 ;;
+          esac
+          case " $ALLOWED " in
+            *" $COMMIT_FINGERPRINT "*) ;;
+            *) echo "Commit signer fingerprint is not authorized"; exit 1 ;;
+          esac
+          if [ "$TAG_FINGERPRINT" != "$COMMIT_FINGERPRINT" ]; then
+            echo "Release tag and target commit must have the same authorized signer"
+            exit 1
+          fi
+
+  build-candidate:
+    name: Build, verify, and retain candidate
+    needs: validate-identity
+    runs-on: ubuntu-latest
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      artifact-digest: ${{ steps.upload.outputs.artifact-digest }}
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24.14.1"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+
+      - name: Pin npm used for candidate bytes
+        run: npm install --global npm@11.11.0
+
+      - name: Install dependencies without lifecycle scripts
+        run: npm ci --ignore-scripts
+
+      - name: Run the full gate
+        run: |
+          npm test
+          npm run lint
+
+      - name: Create commit-bound candidate receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pack --json > npm-pack.json
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import { readFileSync, writeFileSync } from "node:fs";
+          const [pack] = JSON.parse(readFileSync("npm-pack.json", "utf8"));
+          const bytes = readFileSync(pack.filename);
+          const receipt = {
+            schemaVersion: "axf/release-candidate/v1",
+            sourceCommit: process.env.GITHUB_SHA,
+            package: { name: pack.name, version: pack.version },
+            tarball: {
+              filename: pack.filename,
+              sha256: createHash("sha256").update(bytes).digest("hex"),
+              npmIntegrity: pack.integrity,
+              npmShasum: pack.shasum,
+            },
+          };
+          writeFileSync("release-candidate.json", JSON.stringify(receipt, null, 2) + "\n");
+          NODE
+          TARBALL=$(node -p "require('./release-candidate.json').tarball.filename")
+          node scripts/smoke-packed-candidate.mjs "$TARBALL"
+
+      - name: Upload immutable candidate evidence
+        id: upload
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: npm-candidate-${{ github.sha }}
+          path: |
+            smartergpt-axf-*.tgz
+            release-candidate.json
+          retention-days: 30
+          if-no-files-found: error
+
+  smoke-windows:
+    name: Smoke exact candidate on Windows
+    needs: build-candidate
+    runs-on: windows-latest
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24.14.1"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Pin npm used by the packed consumer
+        run: npm install --global npm@11.11.0
+
+      - name: Download exact candidate by immutable ID
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          artifact-ids: ${{ needs.build-candidate.outputs.artifact-id }}
+          path: .
+
+      - name: Verify receipt and run normal-lifecycle packed smoke
+        shell: pwsh
+        run: |
+          $receipt = Get-Content -LiteralPath release-candidate.json -Raw | ConvertFrom-Json
+          if ($receipt.sourceCommit -ne $env:GITHUB_SHA) {
+            throw "Candidate receipt is not bound to this commit"
+          }
+          $observed = (Get-FileHash -LiteralPath $receipt.tarball.filename -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($observed -ne $receipt.tarball.sha256) {
+            throw "Candidate tarball SHA-256 does not match the receipt"
+          }
+          node scripts/smoke-packed-candidate.mjs $receipt.tarball.filename
+
+  publish:
+    name: Publish exact candidate and create release
+    needs:
+      - build-candidate
+      - smoke-windows
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    environment: npm-release
+    permissions:
+      actions: read
+      contents: write
+      id-token: write
+    steps:
+      - name: Harden runner
+        uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
+        with:
+          egress-policy: audit
+          disable-sudo: true
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: "24.14.1"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Pin trusted-publishing npm
+        run: npm install --global npm@11.11.0
+
+      - name: Verify immutable artifact service record
+        env:
+          ARTIFACT_ID: ${{ needs.build-candidate.outputs.artifact-id }}
+          ARTIFACT_DIGEST: ${{ needs.build-candidate.outputs.artifact-digest }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          readarray -t FACTS < <(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ARTIFACT_ID" --jq '[.name, .digest, (.expired | tostring), (.workflow_run.id | tostring)] | .[]')
+          if [ "${FACTS[0]}" != "npm-candidate-$GITHUB_SHA" ] || [ "${FACTS[1]}" != "sha256:$ARTIFACT_DIGEST" ] || [ "${FACTS[2]}" != "false" ] || [ "${FACTS[3]}" != "$GITHUB_RUN_ID" ]; then
+            echo "Candidate artifact is not bound to this workflow run and commit"
+            exit 1
+          fi
+
+      - name: Download exact candidate by immutable ID
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          artifact-ids: ${{ needs.build-candidate.outputs.artifact-id }}
+          path: .
+
+      - name: Verify candidate receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { createHash } from "node:crypto";
+          import { readFileSync } from "node:fs";
+          const receipt = JSON.parse(readFileSync("release-candidate.json", "utf8"));
+          const bytes = readFileSync(receipt.tarball.filename);
+          const sha256 = createHash("sha256").update(bytes).digest("hex");
+          const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+          if (
+            receipt.schemaVersion !== "axf/release-candidate/v1" ||
+            receipt.sourceCommit !== process.env.GITHUB_SHA ||
+            receipt.package.name !== pkg.name ||
+            receipt.package.version !== pkg.version ||
+            receipt.tarball.sha256 !== sha256
+          ) {
+            throw new Error("candidate receipt does not match the checked-out commit and tarball");
+          }
+          NODE
+
+      - name: Publish through npm trusted publishing
+        shell: bash
+        run: |
+          set -euo pipefail
+          TARBALL=$(node -p "require('./release-candidate.json').tarball.filename")
+          EXPECTED=$(node -p "require('./release-candidate.json').tarball.npmIntegrity")
+          NAME=$(node -p "require('./release-candidate.json').package.name")
+          VERSION=$(node -p "require('./release-candidate.json').package.version")
+          OBSERVED=$(npm view "$NAME@$VERSION" dist.integrity 2>/dev/null || true)
+          if [ -z "$OBSERVED" ]; then
+            npm publish "$TARBALL" --access public --provenance
+          elif [ "$OBSERVED" = "$EXPECTED" ]; then
+            echo "$NAME@$VERSION is already published with the exact retained integrity; continuing recovery"
+          else
+            echo "$NAME@$VERSION already exists with different immutable bytes"
+            exit 1
+          fi
+
+      - name: Verify published integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          EXPECTED=$(node -p "require('./release-candidate.json').tarball.npmIntegrity")
+          NAME=$(node -p "require('./release-candidate.json').package.name")
+          VERSION=$(node -p "require('./release-candidate.json').package.version")
+          for attempt in {1..12}; do
+            OBSERVED=$(npm view "$NAME@$VERSION" dist.integrity 2>/dev/null || true)
+            if [ "$OBSERVED" = "$EXPECTED" ]; then
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Published integrity did not converge to the retained candidate"
+          exit 1
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: |
+            smartergpt-axf-*.tgz
+            release-candidate.json
+          fail_on_unmatched_files: true

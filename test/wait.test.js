@@ -56,6 +56,25 @@ test("timed wait cancellation stops only the process-bound timer", async () => {
   assert.equal(result.data.elapsedMs, 250);
 });
 
+test("timed wait reports its duration when an injected clock rolls backward", async () => {
+  let currentMs = 10_000;
+  const result = await runTimedWait(
+    { durationMs: 1_000 },
+    resolvedTimedWaitCapability(),
+    {
+      runtime: {
+        waitNow: () => currentMs,
+        waitDelay: async (durationMs) => {
+          currentMs -= durationMs;
+        },
+      },
+    },
+  );
+
+  assert.equal(result.data.outcome, "elapsed");
+  assert.equal(result.data.elapsedMs, 1_000);
+});
+
 test("timed wait enforces the shared 30-minute bound", async () => {
   for (const durationMs of [999, 1_800_001, 1.5, null]) {
     await assert.rejects(

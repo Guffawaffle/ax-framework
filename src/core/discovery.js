@@ -443,8 +443,19 @@ export function buildCapabilityExamples(capability) {
     );
   }
 
-  const cliArgs = Object.entries(args).flatMap(([name, value]) =>
-    buildCliArgument(properties, name, value),
+  const cliByShell = Object.fromEntries(
+    ["powershell", "posix"].map((shell) => {
+      const cliArgs = Object.entries(args).flatMap(([name, value]) =>
+        buildCliArgument(properties, name, value, shell),
+      );
+      return [
+        shell,
+        [
+          `axf run ${capability.id}`,
+          ...(cliArgs.length > 0 ? ["--", ...cliArgs] : []),
+        ].join(" "),
+      ];
+    }),
   );
   return {
     declared,
@@ -453,10 +464,9 @@ export function buildCapabilityExamples(capability) {
       mcp: { operation: "inspect", target: { id: capability.id } },
     },
     run: {
-      cli: [
-        `axf run ${capability.id}`,
-        ...(cliArgs.length > 0 ? ["--", ...cliArgs] : []),
-      ].join(" "),
+      cli: cliByShell.powershell,
+      cliShell: "powershell",
+      cliByShell,
       mcp: {
         operation: "run",
         target: { id: capability.id },
@@ -620,18 +630,27 @@ function exampleValue(name, schema, capabilityDefault) {
   return `<${name}>`;
 }
 
-function formatCliValue(value) {
-  if (typeof value === "string" && !/\s/.test(value)) return value;
-  return JSON.stringify(value);
+function formatCliValue(value, shell) {
+  const safe =
+    shell === "powershell"
+      ? /^[A-Za-z0-9_./:\\-]+$/
+      : /^[A-Za-z0-9_./:-]+$/;
+  if (typeof value === "string" && safe.test(value)) {
+    return value;
+  }
+  const serialized = typeof value === "string" ? value : JSON.stringify(value);
+  if (shell === "powershell") {
+    return `'${serialized.replace(/'/g, "''")}'`;
+  }
+  return `'${serialized.replace(/'/g, "'\\''")}'`;
 }
 
-function buildCliArgument(properties, name, value) {
+function buildCliArgument(properties, name, value, shell) {
   if (value !== null && typeof value === "object") {
     const jsonName = `${name}Json`;
     if (properties[jsonName]?.type === "string") {
-      const json = JSON.stringify(value).replace(/'/g, "''");
-      return [`--${toKebab(jsonName)}`, `'${json}'`];
+      return [`--${toKebab(jsonName)}`, formatCliValue(value, shell)];
     }
   }
-  return [`--${toKebab(name)}`, formatCliValue(value)];
+  return [`--${toKebab(name)}`, formatCliValue(value, shell)];
 }

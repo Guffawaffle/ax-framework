@@ -6,7 +6,7 @@ const SUBJECT_FIELDS = new Set([
   "pullRequestNumber",
 ]);
 const CONDITION_FIELDS = new Set(["type", "reviewer"]);
-const REVIEWER_FIELDS = new Set(["login", "type"]);
+const REVIEWER_FIELDS = new Set(["id", "login", "type"]);
 const REVIEWER_TYPES = new Set(["Bot", "User"]);
 const SATISFIED_REVIEW_STATES = new Set([
   "APPROVED",
@@ -45,9 +45,7 @@ export async function observeGithubPullRequestReview(descriptor, context) {
     .filter(
       (review) =>
         review.commitId === request.headSha &&
-        review.reviewer.login.toLowerCase() ===
-          request.reviewer.login.toLowerCase() &&
-        review.reviewer.type === request.reviewer.type,
+        review.reviewer.id === request.reviewer.id,
     )
     .sort((left, right) => right.id - left.id);
   const review = matchingReviews[0] ?? null;
@@ -68,7 +66,7 @@ export async function observeGithubPullRequestReview(descriptor, context) {
       repository: request.repository,
       pullRequestNumber: request.pullRequestNumber,
       headSha: request.headSha,
-      reviewer: request.reviewer,
+      reviewer: review?.reviewer ?? request.reviewer,
       review:
         review === null
           ? null
@@ -153,6 +151,14 @@ function validateDescriptor(descriptor) {
     "github.pull-request-review reviewer",
   );
   if (
+    !Number.isSafeInteger(reviewer.id) ||
+    reviewer.id < 1
+  ) {
+    throw new Error(
+      "github.pull-request-review reviewer.id must be a positive safe integer",
+    );
+  }
+  if (
     typeof reviewer.login !== "string" ||
     reviewer.login.length === 0 ||
     reviewer.login.length > 100
@@ -171,7 +177,7 @@ function validateDescriptor(descriptor) {
     repository,
     headSha: headSha.toLowerCase(),
     pullRequestNumber,
-    reviewer: { login: reviewer.login, type: reviewer.type },
+    reviewer: { id: reviewer.id, login: reviewer.login, type: reviewer.type },
   };
 }
 
@@ -205,6 +211,8 @@ function summarizeReview(review) {
     review.user === null ||
     typeof review.user !== "object" ||
     Array.isArray(review.user) ||
+    !Number.isSafeInteger(review.user.id) ||
+    review.user.id < 1 ||
     typeof review.user.login !== "string" ||
     review.user.login.length === 0 ||
     !REVIEWER_TYPES.has(review.user.type) ||
@@ -216,7 +224,11 @@ function summarizeReview(review) {
     id: review.id,
     state: review.state,
     commitId: review.commit_id.toLowerCase(),
-    reviewer: { login: review.user.login, type: review.user.type },
+    reviewer: {
+      id: review.user.id,
+      login: review.user.login,
+      type: review.user.type,
+    },
     submittedAt: review.submitted_at,
   };
 }

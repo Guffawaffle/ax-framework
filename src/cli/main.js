@@ -564,7 +564,8 @@ async function inspectCommand(
     );
   }
   console.log(`example.inspect: ${examples.inspect.cli}`);
-  console.log(`example.run: ${examples.run.cli}`);
+  console.log(`example.run[powershell]: ${examples.run.cliByShell.powershell}`);
+  console.log(`example.run[posix]: ${examples.run.cliByShell.posix}`);
   for (const mapping of examples.argumentMapping) {
     if (mapping.providerFlag) {
       console.log(

@@ -209,6 +209,7 @@ returned.
   "condition": {
     "type": "review-submitted",
     "reviewer": {
+      "id": 123456789,
       "login": "copilot-pull-request-reviewer[bot]",
       "type": "Bot"
     }
@@ -216,12 +217,14 @@ returned.
 }
 ```
 
-Both reviewer fields are mandatory. A matching `COMMENTED`, `APPROVED`, or
-`CHANGES_REQUESTED` review for the exact head satisfies the condition. A matching dismissed review
-is terminal-failed; a missing or pending review remains pending. AXF checks the pull request head
-before observation and again before returning a terminal result, so a force-push or new commit is
-reported as `subject-drift` rather than as completion. Evidence is limited to the exact subject,
-reviewer identity, review ID, state, commit ID, and submission timestamp.
+All three reviewer fields are mandatory. The positive numeric `id` is the stable identity selector;
+`login` and `type` are human-readable context and the evidence reports their current observed
+values. A matching `COMMENTED`, `APPROVED`, or `CHANGES_REQUESTED` review for the exact head
+satisfies the condition. A matching dismissed review is terminal-failed; a missing or pending
+review remains pending. AXF checks the pull request head before observation and again before
+returning a terminal result, so a force-push or new commit is reported as `subject-drift` rather
+than as completion. Evidence is limited to the exact subject, reviewer identity, review ID, state,
+commit ID, and submission timestamp.
 
 Bundled and future providers implement one short observation, not their own poll loop. They must
 honor the supplied `AbortSignal`, return only the closed provider-observation fields, and keep

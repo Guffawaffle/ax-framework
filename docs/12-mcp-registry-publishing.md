@@ -44,8 +44,21 @@ The non-versioned `/servers/dev.smartergpt/axf` URL is not the verification sour
 ## Relationship to the npm release lane
 
 `.github/workflows/release.yml` builds and retains the commit-bound npm tarball, publishes that
-exact tarball through npm trusted publishing for an authorized signed tag at the current `main`
-tip, verifies npm integrity, and attaches the tarball and receipt to the GitHub release.
+exact tarball through npm trusted publishing for an authorized owner-signed tag at the current
+`main` tip and an independently authorized target-commit signer, verifies npm integrity, and
+attaches the tarball and receipt to the GitHub release. The receipt binds the annotated tag
+object, peeled target, validated `main` snapshot, and both signer identities. The publish lane
+rechecks the remote ref before npm publication and GitHub release; the external `npm-release`
+environment approval and immutable SemVer tag ruleset remain required parts of that authority
+boundary.
+
+## Failed 2.1.0 release attempt
+
+The signed annotated `v2.1.0` tag is intentionally retained at
+`d2977f73ad437de4cb9696f332ca851753d2db4a` as evidence of a failed release attempt. The tag-run
+identity gate stopped before candidate construction or publication: npm `2.1.0` and a GitHub
+`v2.1.0` release do not exist. Do not move, delete, recreate, or rerun that tag. The corrected
+release policy and package version supersede it as `2.1.1`.
 
 MCP Registry publication is deliberately separate and manual because the
 `dev.smartergpt/axf` namespace uses DNS-held authority. A green npm/GitHub release does not prove

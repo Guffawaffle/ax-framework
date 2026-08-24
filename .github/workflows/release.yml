@@ -18,6 +18,12 @@ jobs:
   validate-identity:
     name: Validate release identity
     runs-on: ubuntu-latest
+    outputs:
+      commit_signer: ${{ steps.identity.outputs.commit_signer }}
+      main_snapshot: ${{ steps.identity.outputs.main_snapshot }}
+      source_commit: ${{ steps.identity.outputs.source_commit }}
+      tag_object: ${{ steps.identity.outputs.tag_object }}
+      tag_signer: ${{ steps.identity.outputs.tag_signer }}
     steps:
       - name: Harden runner
         uses: step-security/harden-runner@05e31511f85b41b11d1cf0ef85d0992719546e2c # v2
@@ -31,19 +37,23 @@ jobs:
           persist-credentials: false
 
       - name: Validate package, ref, and main identity
+        id: identity
         env:
           EVENT_NAME: ${{ github.event_name }}
           RELEASE_TAG: ${{ github.ref_name }}
           REQUESTED_VERSION: ${{ inputs.version }}
           TRUSTED_GPG_KEYS: ${{ secrets.TRUSTED_GPG_KEYS }}
-          TRUSTED_RELEASE_FINGERPRINTS: ${{ secrets.TRUSTED_RELEASE_FINGERPRINTS }}
+          TRUSTED_COMMIT_FINGERPRINTS: ${{ vars.TRUSTED_COMMIT_FINGERPRINTS }}
+          TRUSTED_RELEASE_FINGERPRINTS: ${{ vars.TRUSTED_RELEASE_FINGERPRINTS }}
         shell: bash
         run: |
           set -euo pipefail
           PACKAGE_VERSION=$(node -p "require('./package.json').version")
           git fetch --no-tags origin main
+          MAIN_SNAPSHOT=$(git rev-parse origin/main)
+          printf 'main_snapshot=%s\nsource_commit=%s\n' "$MAIN_SNAPSHOT" "$GITHUB_SHA" >> "$GITHUB_OUTPUT"
           if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            if [ "$GITHUB_REF" != "refs/heads/main" ] || [ "$GITHUB_SHA" != "$(git rev-parse origin/main)" ]; then
+            if [ "$GITHUB_REF" != "refs/heads/main" ] || [ "$GITHUB_SHA" != "$MAIN_SNAPSHOT" ]; then
               echo "Candidate dispatch must target the current origin/main tip"
               exit 1
             fi
@@ -61,42 +71,24 @@ jobs:
             echo "Release tag must be annotated"
             exit 1
           fi
+          TAG_OBJECT=$(git rev-parse "refs/tags/$RELEASE_TAG")
           TARGET=$(git rev-list -n 1 "$RELEASE_TAG")
-          if [ "$TARGET" != "$GITHUB_SHA" ] || [ "$TARGET" != "$(git rev-parse origin/main)" ]; then
+          if [ "$TARGET" != "$GITHUB_SHA" ] || [ "$TARGET" != "$MAIN_SNAPSHOT" ]; then
             echo "Release tag must target the exact current origin/main tip"
             exit 1
           fi
+          printf 'tag_object=%s\n' "$TAG_OBJECT" >> "$GITHUB_OUTPUT"
           node scripts/verify-release-tag.mjs "$RELEASE_TAG" "$TARGET"
-          if [ -z "$TRUSTED_GPG_KEYS" ] || [ -z "$TRUSTED_RELEASE_FINGERPRINTS" ]; then
-            echo "TRUSTED_GPG_KEYS and TRUSTED_RELEASE_FINGERPRINTS are required"
+          if [ -z "$TRUSTED_GPG_KEYS" ] || [ -z "$TRUSTED_RELEASE_FINGERPRINTS" ] || [ -z "$TRUSTED_COMMIT_FINGERPRINTS" ]; then
+            echo "TRUSTED_GPG_KEYS, TRUSTED_RELEASE_FINGERPRINTS, and TRUSTED_COMMIT_FINGERPRINTS are required"
             exit 1
           fi
           echo "$TRUSTED_GPG_KEYS" | base64 -d | gpg --import
-          ALLOWED=$(printf '%s' "$TRUSTED_RELEASE_FINGERPRINTS" | tr ',;\r\n' '    ' | tr '[:lower:]' '[:upper:]')
-          TAG_VERIFY=$(git verify-tag --raw "$RELEASE_TAG" 2>&1)
-          printf '%s\n' "$TAG_VERIFY"
-          TAG_COUNT=$(printf '%s\n' "$TAG_VERIFY" | grep -c '\[GNUPG:\] VALIDSIG ')
-          TAG_FINGERPRINT=$(printf '%s\n' "$TAG_VERIFY" | awk '$2 == "VALIDSIG" { print toupper($3); exit }')
-          COMMIT_VERIFY=$(git verify-commit --raw "$TARGET" 2>&1)
-          printf '%s\n' "$COMMIT_VERIFY"
-          COMMIT_COUNT=$(printf '%s\n' "$COMMIT_VERIFY" | grep -c '\[GNUPG:\] VALIDSIG ')
-          COMMIT_FINGERPRINT=$(printf '%s\n' "$COMMIT_VERIFY" | awk '$2 == "VALIDSIG" { print toupper($3); exit }')
-          if [ "$TAG_COUNT" -ne 1 ] || [ "$COMMIT_COUNT" -ne 1 ] || [[ ! "$TAG_FINGERPRINT" =~ ^[0-9A-F]{40}$ ]] || [[ ! "$COMMIT_FINGERPRINT" =~ ^[0-9A-F]{40}$ ]]; then
-            echo "Release tag and target commit must each have exactly one valid signature"
-            exit 1
-          fi
-          case " $ALLOWED " in
-            *" $TAG_FINGERPRINT "*) ;;
-            *) echo "Tag signer fingerprint is not authorized"; exit 1 ;;
-          esac
-          case " $ALLOWED " in
-            *" $COMMIT_FINGERPRINT "*) ;;
-            *) echo "Commit signer fingerprint is not authorized"; exit 1 ;;
-          esac
-          if [ "$TAG_FINGERPRINT" != "$COMMIT_FINGERPRINT" ]; then
-            echo "Release tag and target commit must have the same authorized signer"
-            exit 1
-          fi
+          node scripts/verify-release-signatures.mjs \
+            "$RELEASE_TAG" \
+            "$TARGET" \
+            "$TRUSTED_RELEASE_FINGERPRINTS" \
+            "$TRUSTED_COMMIT_FINGERPRINTS"
 
   build-candidate:
     name: Build, verify, and retain candidate
@@ -134,6 +126,12 @@ jobs:
           npm run lint
 
       - name: Create commit-bound candidate receipt
+        env:
+          COMMIT_SIGNER: ${{ needs.validate-identity.outputs.commit_signer }}
+          MAIN_SNAPSHOT: ${{ needs.validate-identity.outputs.main_snapshot }}
+          RELEASE_EVENT: ${{ github.event_name }}
+          TAG_OBJECT: ${{ needs.validate-identity.outputs.tag_object }}
+          TAG_SIGNER: ${{ needs.validate-identity.outputs.tag_signer }}
         shell: bash
         run: |
           set -euo pipefail
@@ -143,9 +141,32 @@ jobs:
           import { readFileSync, writeFileSync } from "node:fs";
           const [pack] = JSON.parse(readFileSync("npm-pack.json", "utf8"));
           const bytes = readFileSync(pack.filename);
+          const oid = /^[0-9a-f]{40}$/u;
+          const fingerprint = /^[0-9A-F]{40}$/u;
+          const releaseIdentity = process.env.RELEASE_EVENT === "push" ? {
+            tag: process.env.GITHUB_REF_NAME,
+            tagObject: process.env.TAG_OBJECT,
+            targetCommit: process.env.GITHUB_SHA,
+            tagSigner: process.env.TAG_SIGNER,
+            commitSigner: process.env.COMMIT_SIGNER,
+          } : null;
+          if (
+            !oid.test(process.env.GITHUB_SHA) ||
+            !oid.test(process.env.MAIN_SNAPSHOT) ||
+            (releaseIdentity && (
+              !oid.test(releaseIdentity.tagObject) ||
+              releaseIdentity.targetCommit !== process.env.GITHUB_SHA ||
+              !fingerprint.test(releaseIdentity.tagSigner) ||
+              !fingerprint.test(releaseIdentity.commitSigner)
+            ))
+          ) {
+            throw new Error("release identity outputs are missing or malformed");
+          }
           const receipt = {
-            schemaVersion: "axf/release-candidate/v1",
+            schemaVersion: "axf/release-candidate/v2",
             sourceCommit: process.env.GITHUB_SHA,
+            validatedMain: process.env.MAIN_SNAPSHOT,
+            releaseIdentity,
             package: { name: pack.name, version: pack.version },
             tarball: {
               filename: pack.filename,
@@ -215,6 +236,7 @@ jobs:
   publish:
     name: Publish exact candidate and create release
     needs:
+      - validate-identity
       - build-candidate
       - smoke-windows
     if: github.event_name == 'push'
@@ -265,6 +287,11 @@ jobs:
           path: .
 
       - name: Verify candidate receipt
+        env:
+          COMMIT_SIGNER: ${{ needs.validate-identity.outputs.commit_signer }}
+          MAIN_SNAPSHOT: ${{ needs.validate-identity.outputs.main_snapshot }}
+          TAG_OBJECT: ${{ needs.validate-identity.outputs.tag_object }}
+          TAG_SIGNER: ${{ needs.validate-identity.outputs.tag_signer }}
         shell: bash
         run: |
           set -euo pipefail
@@ -275,9 +302,23 @@ jobs:
           const bytes = readFileSync(receipt.tarball.filename);
           const sha256 = createHash("sha256").update(bytes).digest("hex");
           const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+          const oid = /^[0-9a-f]{40}$/u;
+          const fingerprint = /^[0-9A-F]{40}$/u;
           if (
-            receipt.schemaVersion !== "axf/release-candidate/v1" ||
+            receipt.schemaVersion !== "axf/release-candidate/v2" ||
+            !oid.test(receipt.sourceCommit) ||
+            !oid.test(receipt.validatedMain) ||
+            !oid.test(receipt.releaseIdentity?.tagObject ?? "") ||
+            !oid.test(receipt.releaseIdentity?.targetCommit ?? "") ||
+            !fingerprint.test(receipt.releaseIdentity?.tagSigner ?? "") ||
+            !fingerprint.test(receipt.releaseIdentity?.commitSigner ?? "") ||
             receipt.sourceCommit !== process.env.GITHUB_SHA ||
+            receipt.validatedMain !== process.env.MAIN_SNAPSHOT ||
+            receipt.releaseIdentity?.tag !== process.env.GITHUB_REF_NAME ||
+            receipt.releaseIdentity?.tagObject !== process.env.TAG_OBJECT ||
+            receipt.releaseIdentity?.targetCommit !== process.env.GITHUB_SHA ||
+            receipt.releaseIdentity?.tagSigner !== process.env.TAG_SIGNER ||
+            receipt.releaseIdentity?.commitSigner !== process.env.COMMIT_SIGNER ||
             receipt.package.name !== pkg.name ||
             receipt.package.version !== pkg.version ||
             receipt.tarball.sha256 !== sha256
@@ -285,6 +326,23 @@ jobs:
             throw new Error("candidate receipt does not match the checked-out commit and tarball");
           }
           NODE
+
+      - name: Re-verify remote release identity before npm publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG=$(node -p "require('./release-candidate.json').releaseIdentity.tag")
+          EXPECTED_OBJECT=$(node -p "require('./release-candidate.json').releaseIdentity.tagObject")
+          EXPECTED_TARGET=$(node -p "require('./release-candidate.json').releaseIdentity.targetCommit")
+          readarray -t REMOTE < <(git ls-remote origin "refs/tags/$TAG" "refs/tags/$TAG^{}")
+          OBSERVED_OBJECT=$(printf '%s\n' "${REMOTE[@]}" | awk -v ref="refs/tags/$TAG" '$2 == ref { print $1 }')
+          OBSERVED_TARGET=$(printf '%s\n' "${REMOTE[@]}" | awk -v ref="refs/tags/$TAG^{}" '$2 == ref { print $1 }')
+          git fetch --no-tags origin main
+          OBSERVED_MAIN=$(git rev-parse FETCH_HEAD)
+          if [ "$OBSERVED_OBJECT" != "$EXPECTED_OBJECT" ] || [ "$OBSERVED_TARGET" != "$EXPECTED_TARGET" ] || [ "$OBSERVED_MAIN" != "$EXPECTED_TARGET" ]; then
+            echo "Remote release tag or current main changed after identity validation"
+            exit 1
+          fi
 
       - name: Publish through npm trusted publishing
         shell: bash
@@ -320,6 +378,21 @@ jobs:
           done
           echo "Published integrity did not converge to the retained candidate"
           exit 1
+
+      - name: Re-verify remote release identity before GitHub release
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG=$(node -p "require('./release-candidate.json').releaseIdentity.tag")
+          EXPECTED_OBJECT=$(node -p "require('./release-candidate.json').releaseIdentity.tagObject")
+          EXPECTED_TARGET=$(node -p "require('./release-candidate.json').releaseIdentity.targetCommit")
+          readarray -t REMOTE < <(git ls-remote origin "refs/tags/$TAG" "refs/tags/$TAG^{}")
+          OBSERVED_OBJECT=$(printf '%s\n' "${REMOTE[@]}" | awk -v ref="refs/tags/$TAG" '$2 == ref { print $1 }')
+          OBSERVED_TARGET=$(printf '%s\n' "${REMOTE[@]}" | awk -v ref="refs/tags/$TAG^{}" '$2 == ref { print $1 }')
+          if [ "$OBSERVED_OBJECT" != "$EXPECTED_OBJECT" ] || [ "$OBSERVED_TARGET" != "$EXPECTED_TARGET" ]; then
+            echo "Remote release tag changed after npm publication"
+            exit 1
+          fi
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3

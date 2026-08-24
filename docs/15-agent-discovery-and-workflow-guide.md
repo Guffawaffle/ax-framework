@@ -182,8 +182,11 @@ results include the active project/execution roots and bounded suggestions.
 ## Inspect examples
 
 `inspect` includes declared examples plus generated CLI and MCP inspect/run
-shapes. It also shows public argument names and provider flag mappings when a
-family declares an `argMap`. Generated placeholders are explicit; provider- or
+shapes. Generated runs identify their shell: `run.cli` remains the canonical
+PowerShell example for compatibility, `run.cliShell` names that shell, and
+`run.cliByShell` provides separately escaped `powershell` and `posix` commands.
+It also shows public argument names and provider flag mappings when a family
+declares an `argMap`. Generated placeholders are explicit; provider- or
 workspace-authored examples remain the source for real environment-specific
 values.
 

@@ -24,6 +24,7 @@ import { readFile, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { AxError } from "./errors.js";
+import { toPortablePath } from "./path-model.js";
 
 const SUPPORTED_MANIFEST_VERSIONS = new Set(["axf/v0"]);
 const KNOWN_KINDS = new Set(["type-adapter", "provider"]);
@@ -246,8 +247,8 @@ export class AdapterRegistry {
       manifest,
       manifestPath:
         provenance === "framework"
-          ? path.relative(FRAMEWORK_ADAPTERS_ROOT, manifestPath)
-          : path.relative(this.rootDir, manifestPath),
+          ? toPortablePath(path.relative(FRAMEWORK_ADAPTERS_ROOT, manifestPath))
+          : toPortablePath(path.relative(this.rootDir, manifestPath)),
       execute: module.execute,
       toolspace,
       provenance: resolvedProvenance,

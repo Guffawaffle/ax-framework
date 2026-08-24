@@ -443,8 +443,9 @@ examples.
 
 Capabilities may also return validated, typed continuations when their immediate result leaves an
 exact external operation in progress. The first continuation kind routes through
-`global.await.external`, whose process-bound GitHub provider observes explicit required checks for
-one exact commit SHA. See [Awaitable completions](docs/16-awaitable-completions.md) for descriptor,
+`global.wait.external`, whose process-bound GitHub providers observe explicit required checks for
+one exact commit SHA or a pull request review from one exact reviewer identity. See
+[Awaitable completions](docs/16-awaitable-completions.md) for descriptor,
 authority, cancellation, and outcome boundaries.
 
 When discovery and execution should use the same repo, set both
@@ -540,7 +541,9 @@ that pack as a runtime dependency.
 | Capability | Provider | Lifecycle | Notes |
 |---|---|---|---|
 | `global.echo.say` | internal | active | smallest in-process capability example |
-| `global.await.external` | await | active | process-bound observation of typed external completions; GitHub exact-head required checks are the first provider |
+| `global.wait.timed` | wait | active | process-bound suspension for 1 second through 30 minutes; elapsed time does not claim external completion |
+| `global.wait.external` | wait | active | process-bound observation of typed external completions; GitHub exact-head checks and pull request reviews are bundled providers |
+| `global.await.external` | await | active | deprecated compatibility alias for `global.wait.external` from the published 2.0.0 contract |
 
 Optional shared packs, including a Lex pack, can be added at machine or
 project scope. They route through the same resolver, lifecycle, policy,

@@ -1,4 +1,5 @@
 import { AxError } from "./errors.js";
+import { toKebab } from "./naming.js";
 
 export const AXF_OPTION_PREFIX = "axf-";
 
@@ -67,6 +68,40 @@ export function capabilityDeclaresArgument(capability, name) {
     capability?.argsSchema?.properties ?? {},
     name,
   );
+}
+
+export function normalizeCapabilityOptionNames(capability, options = {}) {
+  const properties = capability?.argsSchema?.properties ?? {};
+  const publicNames = new Map();
+
+  for (const name of Object.keys(properties)) {
+    const publicName = toKebab(name);
+    const existing = publicNames.get(publicName);
+    if (existing && existing !== name) {
+      throw new AxError(
+        `capability '${capability.id}' has ambiguous CLI arguments '${existing}' and '${name}'`,
+        2,
+      );
+    }
+    publicNames.set(publicName, name);
+  }
+
+  const normalized = {};
+  const spellings = new Map();
+  for (const [providedName, value] of Object.entries(options)) {
+    const canonicalName = Object.hasOwn(properties, providedName)
+      ? providedName
+      : (publicNames.get(providedName) ?? providedName);
+    if (Object.hasOwn(normalized, canonicalName)) {
+      throw new AxError(
+        `capability argument '${canonicalName}' was provided as both '--${spellings.get(canonicalName)}' and '--${providedName}'`,
+        2,
+      );
+    }
+    normalized[canonicalName] = value;
+    spellings.set(canonicalName, providedName);
+  }
+  return normalized;
 }
 
 export function partitionRunOptions(

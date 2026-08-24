@@ -1,13 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { observeGithubRequiredChecks } from "../src/await/providers/github-required-checks.js";
+import { observeGithubPullRequestReview } from "../src/await/providers/github-pull-request-review.js";
 import {
   runAwaitExternal,
   validateAwaitObservation,
 } from "../src/await/index.js";
 import {
+  AWAIT_CONTINUATION_KIND,
   AWAITABLE_SCHEMA_VERSION,
   assertAwaitableDescriptor,
+  WAIT_CONTINUATION_KIND,
   validateExecutionContinuations,
 } from "../src/core/awaitable.js";
 import { validateCapabilityManifest } from "../src/core/manifest-validator.js";
@@ -15,12 +18,17 @@ import { synthesizeFamilyCapabilities } from "../src/core/family-loader.js";
 
 const headSha = "0123456789abcdef0123456789abcdef01234567";
 
+test("published await continuation export remains compatible", () => {
+  assert.equal(AWAIT_CONTINUATION_KIND, "await-external");
+  assert.equal(WAIT_CONTINUATION_KIND, "wait-external");
+});
+
 test("completion manifests declare one exact observer contract", () => {
   const manifest = capabilityManifest({
     completion: {
       mode: "external-awaitable",
       descriptorSchema: AWAITABLE_SCHEMA_VERSION,
-      observer: "global.await.external",
+      observer: "global.wait.external",
     },
   });
 
@@ -44,14 +52,14 @@ test("typed continuations remain suggested invocations bound to the manifest obs
     completion: {
       mode: "external-awaitable",
       descriptorSchema: AWAITABLE_SCHEMA_VERSION,
-      observer: "global.await.external",
+      observer: "global.wait.external",
     },
   });
   const continuation = {
-    kind: "await-external",
+    kind: "wait-external",
     recommended: true,
     reason: "Required checks are externally owned.",
-    capability: "global.await.external",
+    capability: "global.wait.external",
     args: {
       descriptor: githubDescriptor(),
       deadlineMs: 30_000,
@@ -78,6 +86,25 @@ test("typed continuations remain suggested invocations bound to the manifest obs
         completion: undefined,
       }),
     /without a valid completion contract/,
+  );
+
+  const legacy = {
+    ...continuation,
+    kind: "await-external",
+    capability: "global.await.external",
+  };
+  assert.equal(
+    validateExecutionContinuations(
+      { ok: true, continuations: [legacy] },
+      {
+        ...capability,
+        completion: {
+          ...capability.completion,
+          observer: "global.await.external",
+        },
+      },
+    ).continuations[0],
+    legacy,
   );
 });
 
@@ -127,7 +154,7 @@ test("family commands preserve completion metadata when synthesized", () => {
           completion: {
             mode: "external-awaitable",
             descriptorSchema: AWAITABLE_SCHEMA_VERSION,
-            observer: "global.await.external",
+            observer: "global.wait.external",
           },
         },
       },
@@ -135,7 +162,7 @@ test("family commands preserve completion metadata when synthesized", () => {
     { existingIds: new Set() },
   );
 
-  assert.equal(capability.completion.observer, "global.await.external");
+  assert.equal(capability.completion.observer, "global.wait.external");
   assert.deepEqual(validateCapabilityManifest(capability, "family fixture"), []);
 });
 
@@ -170,6 +197,37 @@ test("process-bound Await delegates short observations and owns the finite deadl
   assert.equal(result.data.underlyingCancellation, false);
 });
 
+test("Await deadline cannot be extended by a backward clock", async () => {
+  let currentMs = 10_000;
+  let simulatedWaitedMs = 0;
+  const result = await runAwaitExternal(
+    {
+      descriptor: {
+        schemaVersion: AWAITABLE_SCHEMA_VERSION,
+        kind: "test.timer",
+        subject: { readyAfterObservations: 100 },
+        condition: { type: "observation-count" },
+      },
+      deadlineMs: 1_000,
+    },
+    resolvedAwaitCapability(),
+    {
+      runtime: {
+        env: { AXF_AWAIT_ENABLE_TEST_PROVIDERS: "1" },
+        awaitNow: () => currentMs,
+        awaitWait: async (delayMs) => {
+          simulatedWaitedMs += delayMs;
+          currentMs -= delayMs;
+        },
+      },
+    },
+  );
+
+  assert.equal(result.data.outcome, "deadline");
+  assert.equal(simulatedWaitedMs, 1_000);
+  assert.ok(result.data.observationCount < 100);
+});
+
 test("GitHub Await distinguishes satisfied, failed, pending, and exact PR head drift", async () => {
   const satisfied = await observeGithubRequiredChecks(githubDescriptor(), {
     env: { GH_TOKEN: "test-token" },
@@ -200,6 +258,83 @@ test("GitHub Await distinguishes satisfied, failed, pending, and exact PR head d
   assert.equal(drift.outcome, "subject-drift");
   assert.equal(drift.evidence.expectedHeadSha, headSha);
   assert.equal(drift.evidence.observedHeadSha, "f".repeat(40));
+});
+
+test("GitHub review Await binds completion to the exact head and reviewer identity", async () => {
+  const satisfied = await observeGithubPullRequestReview(githubReviewDescriptor(), {
+    env: { GH_TOKEN: "test-token" },
+    fetch: githubReviewFetch(),
+  });
+  assert.equal(satisfied.outcome, "satisfied");
+  assert.deepEqual(satisfied.evidence.reviewer, {
+    id: 123456789,
+    login: "copilot-pull-request-reviewer[bot]",
+    type: "Bot",
+  });
+  assert.equal(satisfied.evidence.review.state, "COMMENTED");
+  assert.equal(satisfied.evidence.review.commitId, headSha);
+
+  const wrongId = await observeGithubPullRequestReview(githubReviewDescriptor(), {
+    env: { GH_TOKEN: "test-token" },
+    fetch: githubReviewFetch({ reviewerId: 987654321 }),
+  });
+  assert.equal(wrongId.outcome, "pending");
+  assert.equal(wrongId.evidence.review, null);
+
+  const renamed = await observeGithubPullRequestReview(githubReviewDescriptor(), {
+    env: { GH_TOKEN: "test-token" },
+    fetch: githubReviewFetch({ reviewerLogin: "renamed-reviewer[bot]" }),
+  });
+  assert.equal(renamed.outcome, "satisfied");
+  assert.deepEqual(renamed.evidence.reviewer, {
+    id: 123456789,
+    login: "renamed-reviewer[bot]",
+    type: "Bot",
+  });
+
+  const wrongHead = await observeGithubPullRequestReview(githubReviewDescriptor(), {
+    env: { GH_TOKEN: "test-token" },
+    fetch: githubReviewFetch({ reviewCommitId: "e".repeat(40) }),
+  });
+  assert.equal(wrongHead.outcome, "pending");
+
+  const dismissed = await observeGithubPullRequestReview(githubReviewDescriptor(), {
+    env: { GH_TOKEN: "test-token" },
+    fetch: githubReviewFetch({ state: "DISMISSED" }),
+  });
+  assert.equal(dismissed.outcome, "terminal-failed");
+});
+
+test("GitHub review Await detects head drift and rejects implicit reviewer identities", async () => {
+  const drift = await observeGithubPullRequestReview(githubReviewDescriptor(), {
+    env: { GH_TOKEN: "test-token" },
+    fetch: githubReviewFetch({ pullHeadSha: "f".repeat(40) }),
+  });
+  assert.equal(drift.outcome, "subject-drift");
+  assert.equal(drift.evidence.expectedHeadSha, headSha);
+  assert.equal(drift.evidence.observedHeadSha, "f".repeat(40));
+
+  const descriptor = githubReviewDescriptor();
+  delete descriptor.condition.reviewer.type;
+  await assert.rejects(
+    () =>
+      observeGithubPullRequestReview(descriptor, {
+        env: { GH_TOKEN: "test-token" },
+        fetch: githubReviewFetch(),
+      }),
+    /reviewer\.type must be 'Bot' or 'User'/,
+  );
+
+  const missingId = githubReviewDescriptor();
+  delete missingId.condition.reviewer.id;
+  await assert.rejects(
+    () =>
+      observeGithubPullRequestReview(missingId, {
+        env: { GH_TOKEN: "test-token" },
+        fetch: githubReviewFetch(),
+      }),
+    /reviewer\.id must be a positive safe integer/,
+  );
 });
 
 test("GitHub Await uses the newest commit status for an explicit context", async () => {
@@ -387,6 +522,60 @@ function githubDescriptor(subject = {}) {
   };
 }
 
+function githubReviewDescriptor() {
+  return {
+    schemaVersion: AWAITABLE_SCHEMA_VERSION,
+    kind: "github.pull-request-review",
+    subject: {
+      repository: "owner/repository",
+      pullRequestNumber: 42,
+      headSha,
+    },
+    condition: {
+      type: "review-submitted",
+      reviewer: {
+        id: 123456789,
+        login: "copilot-pull-request-reviewer[bot]",
+        type: "Bot",
+      },
+    },
+  };
+}
+
+function githubReviewFetch({
+  pullHeadSha = headSha,
+  reviewCommitId = headSha,
+  reviewerId = 123456789,
+  reviewerLogin = "copilot-pull-request-reviewer[bot]",
+  reviewerType = "Bot",
+  state = "COMMENTED",
+} = {}) {
+  return async (url) => {
+    let body;
+    if (url.includes("/reviews")) {
+      body = [
+        {
+          id: 123,
+          state,
+          commit_id: reviewCommitId,
+          submitted_at: "2026-08-05T07:33:42Z",
+          user: { id: reviewerId, login: reviewerLogin, type: reviewerType },
+        },
+      ];
+    } else if (url.includes("/pulls/")) {
+      body = { head: { sha: pullHeadSha } };
+    } else {
+      throw new Error(`unexpected GitHub URL: ${url}`);
+    }
+    return {
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      text: async () => JSON.stringify(body),
+    };
+  };
+}
+
 function githubFetch({
   windows = "success",
   macos = "success",
@@ -452,7 +641,7 @@ function capabilityManifest(overrides = {}) {
 function resolvedAwaitCapability() {
   return {
     capability: {
-      id: "global.await.external",
+      id: "global.wait.external",
       sourceCapabilityId: null,
     },
   };

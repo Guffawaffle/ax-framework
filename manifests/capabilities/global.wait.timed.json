@@ -1,0 +1,36 @@
+{
+  "manifestVersion": "axf/v0",
+  "id": "global.wait.timed",
+  "summary": "Suspend for one bounded duration without claiming external completion",
+  "provider": "wait",
+  "adapterType": "internal",
+  "executionTarget": {
+    "handler": "wait.timed"
+  },
+  "argsSchema": {
+    "type": "object",
+    "properties": {
+      "durationMs": {
+        "type": "integer",
+        "minimum": 1000,
+        "maximum": 1800000
+      }
+    },
+    "required": ["durationMs"],
+    "additionalProperties": false
+  },
+  "outputModes": ["json"],
+  "sideEffects": "none",
+  "scope": "global",
+  "lifecycleState": "active",
+  "defaults": {},
+  "policies": [],
+  "owner": "module:wait",
+  "examples": [
+    {
+      "operation": "run",
+      "target": { "id": "global.wait.timed" },
+      "args": { "durationMs": 900000 }
+    }
+  ]
+}

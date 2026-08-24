@@ -2,9 +2,13 @@ import { AxError } from "./errors.js";
 
 export const AWAITABLE_SCHEMA_VERSION = "axf/awaitable/v1";
 export const AWAIT_RESULT_SCHEMA_VERSION = "axf/await-result/v1";
+export const WAIT_CONTINUATION_KIND = "wait-external";
 export const AWAIT_CONTINUATION_KIND = "await-external";
-export const MIN_AWAIT_DEADLINE_MS = 1_000;
-export const MAX_AWAIT_DEADLINE_MS = 30 * 60 * 1_000;
+export const LEGACY_AWAIT_CONTINUATION_KIND = AWAIT_CONTINUATION_KIND;
+export const MIN_WAIT_MS = 1_000;
+export const MAX_WAIT_MS = 30 * 60 * 1_000;
+export const MIN_AWAIT_DEADLINE_MS = MIN_WAIT_MS;
+export const MAX_AWAIT_DEADLINE_MS = MAX_WAIT_MS;
 
 const MAX_CONTINUATIONS = 4;
 const MAX_CONTINUATION_REASON_LENGTH = 500;
@@ -206,9 +210,12 @@ function assertContinuation(value, completion, label) {
   if (hasUnknownFields(value, CONTINUATION_FIELDS)) {
     throw new AxError(`${label} contains unsupported fields`, 1);
   }
-  if (value.kind !== AWAIT_CONTINUATION_KIND) {
+  if (
+    value.kind !== WAIT_CONTINUATION_KIND &&
+    value.kind !== LEGACY_AWAIT_CONTINUATION_KIND
+  ) {
     throw new AxError(
-      `${label}.kind must be '${AWAIT_CONTINUATION_KIND}'`,
+      `${label}.kind must be '${WAIT_CONTINUATION_KIND}' or the legacy '${LEGACY_AWAIT_CONTINUATION_KIND}'`,
       1,
     );
   }

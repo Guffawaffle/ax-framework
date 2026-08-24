@@ -10,7 +10,7 @@ The boundary is:
 ```text
 AXF capability returns an inspectable continuation
         ↓
-global.await.external observes an exact external subject
+global.wait.external observes an exact external subject
         ↓
 provider returns bounded terminal evidence
 ```
@@ -27,7 +27,7 @@ A capability that may return an external continuation declares that fact statica
   "completion": {
     "mode": "external-awaitable",
     "descriptorSchema": "axf/awaitable/v1",
-    "observer": "global.await.external"
+    "observer": "global.wait.external"
   }
 }
 ```
@@ -47,10 +47,10 @@ After successful immediate work, the capability may return a bounded top-level c
   },
   "continuations": [
     {
-      "kind": "await-external",
+      "kind": "wait-external",
       "recommended": true,
       "reason": "Required checks are externally owned and may outlive this invocation.",
-      "capability": "global.await.external",
+      "capability": "global.wait.external",
       "args": {
         "descriptor": {
           "schemaVersion": "axf/awaitable/v1",
@@ -88,14 +88,19 @@ producer's manifest, but the later `run` resolves the observer again and re-appl
 policy, provider identity, arguments, and current host authority. Descriptors containing credential
 or token fields are rejected.
 
-## Await invocation
+The built-in `global.echo.say` capability accepts an optional `await` argument only as a harmless
+producer-plumbing fixture. It returns that validated argument as a `wait-external` continuation
+without creating external work. Real integrations should return continuations from the capability
+that actually initiated or identified the externally owned operation.
 
-Await remains a capability behind AXF's one MCP tool:
+## External wait invocation
+
+External wait remains a capability behind AXF's one MCP tool:
 
 ```json
 {
   "operation": "run",
-  "target": { "id": "global.await.external" },
+  "target": { "id": "global.wait.external" },
   "args": {
     "descriptor": {
       "schemaVersion": "axf/awaitable/v1",
@@ -121,13 +126,37 @@ CLI callers supply the same descriptor as JSON because ordinary CLI flags cannot
 nested object:
 
 ```sh
-axf run global.await.external --axf-json -- \
+axf run global.wait.external --axf-json -- \
   --descriptorJson '{"schemaVersion":"axf/awaitable/v1","kind":"github.required-checks","subject":{"repository":"owner/repository","headSha":"0123456789abcdef0123456789abcdef01234567"},"condition":{"type":"all-required-checks-terminal","requiredChecks":[{"source":"check-run","name":"Windows"}]}}' \
   --deadlineMs 1800000
 ```
 
 Exactly one of `descriptor` or `descriptorJson` is accepted. Deadlines are finite and bounded from
 1 second through 30 minutes.
+
+`global.await.external` and the `await-external` continuation kind remain accepted only as
+compatibility aliases for the published 2.0.0 contract. New producers and callers use the
+`global.wait.*` namespace and `wait-external` kind.
+
+## Timed wait baseline
+
+When an agent knows the expected duration but has no exact external observer, `global.wait.timed`
+suspends the current MCP invocation without spending intermediate model turns:
+
+```json
+{
+  "operation": "run",
+  "target": { "id": "global.wait.timed" },
+  "args": { "durationMs": 900000 }
+}
+```
+
+Durations are bounded from 1 second through 30 minutes. The result reports only `elapsed` or
+`cancelled`, the requested and measured durations, and honest `process-bound` durability. Elapsed
+time never implies that CI or another external operation completed. After the timer elapses, the
+agent performs one real status observation. MCP clients should configure a transport timeout above
+30 minutes; 35 minutes leaves a practical cleanup margin without changing the per-call semantic
+limit.
 
 ## GitHub required-checks provider
 
@@ -163,6 +192,39 @@ The result uses `axf/await-result/v1` and one closed outcome:
 Missing and in-progress checks are pending, not successful. Evidence contains only the exact
 subject and requested normalized check states; provider response bodies and credentials are not
 returned.
+
+## GitHub pull-request-review provider
+
+`github.pull-request-review` observes one explicit reviewer on one exact pull request head:
+
+```json
+{
+  "schemaVersion": "axf/awaitable/v1",
+  "kind": "github.pull-request-review",
+  "subject": {
+    "repository": "owner/repository",
+    "pullRequestNumber": 42,
+    "headSha": "0123456789abcdef0123456789abcdef01234567"
+  },
+  "condition": {
+    "type": "review-submitted",
+    "reviewer": {
+      "id": 123456789,
+      "login": "copilot-pull-request-reviewer[bot]",
+      "type": "Bot"
+    }
+  }
+}
+```
+
+All three reviewer fields are mandatory. The positive numeric `id` is the stable identity selector;
+`login` and `type` are human-readable context and the evidence reports their current observed
+values. A matching `COMMENTED`, `APPROVED`, or `CHANGES_REQUESTED` review for the exact head
+satisfies the condition. A matching dismissed review is terminal-failed; a missing or pending
+review remains pending. AXF checks the pull request head before observation and again before
+returning a terminal result, so a force-push or new commit is reported as `subject-drift` rather
+than as completion. Evidence is limited to the exact subject, reviewer identity, review ID, state,
+commit ID, and submission timestamp.
 
 Bundled and future providers implement one short observation, not their own poll loop. They must
 honor the supplied `AbortSignal`, return only the closed provider-observation fields, and keep

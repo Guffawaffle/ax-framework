@@ -1,7 +1,7 @@
 // Tiny JSON Schema subset for axf v0 argsSchema validation and coercion.
 // Supported: type (string/number/integer/boolean/object/array),
 // required, properties, enum, minimum, maximum, minLength,
-// additionalProperties (defaults to true).
+// additionalProperties (defaults to true), oneOf.
 //
 // Goal: be small, predictable, and replaceable. Swap in Ajv later by
 // changing only this file's exported surface.
@@ -26,15 +26,41 @@ export function assertValid(schema, value, label, opts) {
 }
 
 function walk(schema, value, path, ctx) {
-    if (schema == null || typeof schema !== "object") return value;
+  if (schema == null || typeof schema !== "object") return value;
 
-    if (schema.type === "object" || (schema.properties && !schema.type)) {
-        return walkObject(schema, value, path, ctx);
+    let out;
+    if (
+        schema.type === "object" ||
+        ((schema.properties || schema.required) && !schema.type)
+    ) {
+        out = walkObject(schema, value, path, ctx);
+    } else if (schema.type === "array") {
+        out = walkArray(schema, value, path, ctx);
+    } else {
+        out = walkScalar(schema, value, path, ctx);
     }
-    if (schema.type === "array") {
-        return walkArray(schema, value, path, ctx);
+    return applyOneOf(schema, out, path, ctx);
+}
+
+function applyOneOf(schema, value, path, ctx) {
+    if (!Array.isArray(schema.oneOf)) return value;
+    const matches = [];
+    for (const alternative of schema.oneOf) {
+        const errors = [];
+        const candidate = walk(alternative, value, path, {
+            ...ctx,
+            errors
+        });
+        if (errors.length === 0) matches.push(candidate);
     }
-    return walkScalar(schema, value, path, ctx);
+    if (matches.length !== 1) {
+        ctx.errors.push({
+            path,
+            message: `must match exactly one oneOf schema; matched ${matches.length}`
+        });
+        return value;
+    }
+    return matches[0];
 }
 
 function walkObject(schema, value, path, ctx) {

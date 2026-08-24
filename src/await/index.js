@@ -1,10 +1,12 @@
 import { AxError } from "../core/errors.js";
+import { performance } from "node:perf_hooks";
 import {
   assertAwaitableDescriptor,
   assertAwaitDeadline,
   AWAIT_RESULT_SCHEMA_VERSION,
 } from "../core/awaitable.js";
 import { observeGithubRequiredChecks } from "./providers/github-required-checks.js";
+import { observeGithubPullRequestReview } from "./providers/github-pull-request-review.js";
 import { observeTimerFixture } from "./providers/timer-fixture.js";
 
 const DEFAULT_POLL_MS = 5_000;
@@ -24,13 +26,14 @@ export async function runAwaitExternal(args, resolved, ctx = {}) {
   const deadlineMs = assertAwaitDeadline(args.deadlineMs);
   const runtime = ctx.runtime ?? {};
   const signal = ctx.signal ?? null;
-  const now = runtime.awaitNow ?? Date.now;
+  const now = runtime.awaitNow ?? (() => performance.now());
   const wait = runtime.awaitWait ?? waitForDelay;
   const maxObservationMs = clampObservationTimeoutMs(
     runtime.awaitObservationTimeoutMs ?? DEFAULT_OBSERVATION_TIMEOUT_MS,
   );
   const backend = resolveBackend(descriptor.kind, runtime.env ?? process.env);
   const startedAt = now();
+  let elapsedFloorMs = 0;
   let observationCount = 0;
   let lastEvidence = null;
 
@@ -39,15 +42,14 @@ export async function runAwaitExternal(args, resolved, ctx = {}) {
       return terminalResult("cancelled", lastEvidence);
     }
 
-    const elapsedMs = Math.max(0, now() - startedAt);
-    if (elapsedMs >= deadlineMs) {
+    if (elapsedMs() >= deadlineMs) {
       return terminalResult("deadline", lastEvidence);
     }
 
     observationCount += 1;
     const remainingBeforeObservationMs = Math.max(
       1,
-      deadlineMs - (now() - startedAt),
+      deadlineMs - elapsedMs(),
     );
     const observationTimeoutMs = Math.min(
       remainingBeforeObservationMs,
@@ -108,19 +110,28 @@ export async function runAwaitExternal(args, resolved, ctx = {}) {
       return terminalResult(observation.outcome, lastEvidence);
     }
 
-    const remainingMs = Math.max(0, deadlineMs - (now() - startedAt));
+    const remainingMs = Math.max(0, deadlineMs - elapsedMs());
     const delayMs = Math.min(
       remainingMs,
       clampPollMs(observation.retryAfterMs ?? DEFAULT_POLL_MS),
     );
+    const elapsedBeforeWaitMs = elapsedMs();
     try {
       await wait(delayMs, signal);
+      elapsedFloorMs = Math.max(
+        elapsedFloorMs,
+        elapsedBeforeWaitMs + delayMs,
+      );
     } catch (error) {
       if (signal?.aborted) {
         return terminalResult("cancelled", lastEvidence);
       }
       return observationError(error?.message ?? String(error));
     }
+  }
+
+  function elapsedMs() {
+    return Math.max(elapsedFloorMs, 0, now() - startedAt);
   }
 
   function resultData(outcome, evidence) {
@@ -176,6 +187,9 @@ function resolveDescriptor(args) {
 }
 
 function resolveBackend(kind, env) {
+  if (kind === "github.pull-request-review") {
+    return observeGithubPullRequestReview;
+  }
   if (kind === "github.required-checks") {
     return observeGithubRequiredChecks;
   }

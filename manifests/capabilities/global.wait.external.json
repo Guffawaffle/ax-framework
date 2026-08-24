@@ -1,11 +1,11 @@
 {
   "manifestVersion": "axf/v0",
-  "id": "global.await.external",
-  "summary": "Deprecated compatibility alias for global.wait.external",
-  "provider": "await",
+  "id": "global.wait.external",
+  "summary": "Observe an exact external operation until a declared terminal condition",
+  "provider": "wait",
   "adapterType": "internal",
   "executionTarget": {
-    "handler": "await.external"
+    "handler": "wait.external"
   },
   "argsSchema": {
     "type": "object",
@@ -58,7 +58,7 @@
   "examples": [
     {
       "operation": "run",
-      "target": { "id": "global.await.external" },
+      "target": { "id": "global.wait.external" },
       "args": {
         "descriptor": {
           "schemaVersion": "axf/awaitable/v1",

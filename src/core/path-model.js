@@ -1,5 +1,9 @@
 import { AxError } from "./errors.js";
 
+export function toPortablePath(value) {
+  return String(value).replaceAll("\\", "/");
+}
+
 export function parseCapabilityInput(registry, inputTokens) {
   if (inputTokens.length === 1 && isFullyQualifiedId(inputTokens[0])) {
     return { kind: "id", id: inputTokens[0] };

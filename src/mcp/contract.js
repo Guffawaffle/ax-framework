@@ -12,7 +12,7 @@ export const AXF_MCP_OPERATIONS = Object.freeze([
 ]);
 
 export const AXF_TOOL_DESCRIPTION =
-  "AXF capability router. Use this single MCP tool to guide, list, explain, inspect, and run AXF capabilities. Capabilities such as global.echo.say are not separate MCP tools. Prefer guide for bounded workflow entrypoints or list with compact/search for discovery. Always inspect before run, and use projectRoot/executionRoot when discovery and execution roots differ.";
+  "AXF capability router. Use this single MCP tool to guide, list, explain, inspect, and run AXF capabilities. Capabilities such as global.echo.say are not separate MCP tools. Prefer guide for bounded workflow entrypoints or list with compact/search for discovery. For known external delays, prefer one global.wait.timed invocation over repeated agent status checks; use global.wait.external when an exact typed observer exists. Always inspect before run, and use projectRoot/executionRoot when discovery and execution roots differ.";
 
 export const AXF_MCP_CAPABILITY_EXAMPLES = Object.freeze(["global.echo.say"]);
 

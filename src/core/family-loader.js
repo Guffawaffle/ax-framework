@@ -31,6 +31,8 @@ import {
   AXF_OPTION_PREFIX,
   isFrameworkReservedArgName,
 } from "./framework-options.js";
+import { toPortablePath } from "./path-model.js";
+import { toKebab } from "./naming.js";
 
 const SUPPORTED_FAMILY_VERSIONS = new Set(["axf/v0"]);
 const SUPPORTED_ARG_STYLES = new Set([
@@ -63,7 +65,7 @@ export async function loadFamilies({ familiesRoot, rootDir }) {
   for (const entry of entries) {
     if (!entry.isFile() || !entry.name.endsWith(".family.json")) continue;
     const filePath = path.join(familiesRoot, entry.name);
-    const relativePath = path.relative(rootDir, filePath);
+    const relativePath = toPortablePath(path.relative(rootDir, filePath));
     let manifest;
     try {
       manifest = JSON.parse(await readFile(filePath, "utf8"));
@@ -308,13 +310,6 @@ export function deriveFlag(name, style) {
     return `-${toPascal(name)}`;
   }
   return `--${toKebab(name)}`;
-}
-
-function toKebab(name) {
-  return name
-    .replace(/([a-z0-9])([A-Z])/g, "$1-$2")
-    .replace(/_+/g, "-")
-    .toLowerCase();
 }
 
 function toPascal(name) {

@@ -10,7 +10,7 @@ export function prepareCommandInvocation(command, args = [], options = {}) {
 
   if (platform === "win32" && isWindowsCommandShim(resolvedCommand)) {
     return {
-      command: env.ComSpec || "cmd.exe",
+      command: readEnvironmentValue(env, "ComSpec", platform) || "cmd.exe",
       args: ["/d", "/s", "/c", resolvedCommand, ...args],
       requestedCommand: command,
       resolvedCommand,
@@ -68,7 +68,10 @@ export function isWindowsCommandShim(filePath) {
 
 function buildPathCandidates(command, { env, platform }) {
   const pathApi = platform === "win32" ? path.win32 : path.posix;
-  const entries = splitPathEntries(env.PATH ?? "", platform);
+  const entries = splitPathEntries(
+    readEnvironmentValue(env, "PATH", platform) ?? "",
+    platform,
+  );
   const suffixes = buildExecutableSuffixes(command, { env, platform });
   const candidates = [];
   for (const entry of entries) {
@@ -88,12 +91,27 @@ function buildExecutableSuffixes(command, { env, platform }) {
     return [command];
   }
 
-  const pathext = (env.PATHEXT ?? DEFAULT_WINDOWS_PATH_EXTENSIONS.join(";"))
+  const pathext = (
+    readEnvironmentValue(env, "PATHEXT", platform) ??
+    DEFAULT_WINDOWS_PATH_EXTENSIONS.join(";")
+  )
     .split(";")
     .map((ext) => ext.trim())
     .filter(Boolean);
 
   return [...pathext.map((ext) => `${command}${ext}`), command];
+}
+
+function readEnvironmentValue(env, name, platform) {
+  if (Object.prototype.hasOwnProperty.call(env, name)) {
+    return env[name];
+  }
+  if (platform !== "win32") {
+    return undefined;
+  }
+  const normalized = name.toLowerCase();
+  const match = Object.keys(env).find((key) => key.toLowerCase() === normalized);
+  return match === undefined ? undefined : env[match];
 }
 
 function splitPathEntries(pathValue, platform) {

@@ -51,7 +51,7 @@ export function resolveCommandBinary(command, options = {}) {
     return {
       requestedCommand: command,
       resolvedCommand: candidate,
-      source: `path:${path.dirname(candidate)}`,
+      source: `path:${pathApi.dirname(candidate)}`,
     };
   }
 

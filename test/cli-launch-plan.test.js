@@ -600,6 +600,37 @@ test("cli invocation prefers Windows npm cmd shim over extensionless shim", () =
   }
 });
 
+test("cli invocation resolves Windows environment keys after MCP snapshots their native casing", () => {
+  const env = {
+    Path: "D:\\dev\\smartergpt-windows\\bin",
+    PathExt: ".COM;.EXE;.BAT;.CMD",
+    COMSPEC: "C:\\Windows\\System32\\cmd.exe",
+  };
+
+  const originalExists = globalThis.__AXF_TEST_FILE_EXISTS;
+  globalThis.__AXF_TEST_FILE_EXISTS = (candidate) =>
+    candidate === "D:\\dev\\smartergpt-windows\\bin\\lex.CMD";
+  try {
+    const invocation = prepareCommandInvocation("lex", ["introspect"], {
+      env: { ...env },
+      platform: "win32",
+    });
+
+    assert.equal(invocation.command, "C:\\Windows\\System32\\cmd.exe");
+    assert.deepEqual(invocation.args, [
+      "/d",
+      "/s",
+      "/c",
+      "D:\\dev\\smartergpt-windows\\bin\\lex.CMD",
+      "introspect",
+    ]);
+    assert.equal(invocation.commandSource, "path:D:\\dev\\smartergpt-windows\\bin");
+    assert.equal(invocation.launchStrategy, "windows-cmd-shim");
+  } finally {
+    globalThis.__AXF_TEST_FILE_EXISTS = originalExists;
+  }
+});
+
 async function bootstrapWorkspace(root) {
   await writeFile(
     path.join(root, "axf.workspace.json"),

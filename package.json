@@ -19,7 +19,10 @@
     "templates/",
     "axf.workspace.json",
     "README.md",
-    "LICENSE.md"
+    "LICENSE.md",
+    "NOTICE.md",
+    "GOVERNANCE.md",
+    "BRAND.md"
   ],
   "scripts": {
     "axf": "node bin/axf.js",
@@ -44,7 +47,7 @@
     "url": "https://github.com/Guffawaffle/axf/issues"
   },
   "mcpName": "dev.smartergpt/axf",
-  "license": "SEE LICENSE IN LICENSE.md",
+  "license": "Apache-2.0",
   "publishConfig": {
     "access": "public"
   },

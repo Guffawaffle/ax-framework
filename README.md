@@ -49,7 +49,8 @@ axf inspect echo say
 axf run echo say --message hello
 ```
 
-The package is source-available and subject to the license terms below. A
+The current source is Apache-2.0 licensed; earlier npm releases retain their
+published terms until a new Apache-2.0 release is published. A
 fitted repository normally adds its own capabilities; `echo.say` only proves
 that the registry, resolver, adapter, and executor are connected.
 
@@ -126,19 +127,13 @@ path.
 
 ### License
 
-This repository is **source-available**, not open source.
+AXF is licensed under the [Apache License, Version 2.0](./LICENSE.md),
+including commercial and organizational use under its terms. Preserve the
+applicable [notices](./NOTICE.md). Earlier releases retain their applicable terms.
 
-You may view, fork, modify, and run this project for personal,
-non-commercial use under the [SmarterGPT Source-Available Personal Use
-License](./LICENSE.md).
-
-Commercial use, organizational use, employer/client use, production use,
-hosted-service use, redistribution, sublicensing, or embedding in another
-product or platform requires a separate written license from Joseph Gustavson /
-Guffawaffle / SmarterGPT.
-
-Public visibility on GitHub does not grant open-source rights or
-business-use rights.
+SmarterGPT was founded by Joseph Gustavson (Guffawaffle). See
+[stewardship](./GOVERNANCE.md), [contributing](./CONTRIBUTING.md), and
+[project identity](./BRAND.md). Code licensing does not grant runtime authority.
 
 The npm package name is `@smartergpt/axf`. It installs two bins:
 

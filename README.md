@@ -49,10 +49,13 @@ axf inspect echo say
 axf run echo say --message hello
 ```
 
-The current source is Apache-2.0 licensed; earlier npm releases retain their
-published terms until a new Apache-2.0 release is published. A
-fitted repository normally adds its own capabilities; `echo.say` only proves
-that the registry, resolver, adapter, and executor are connected.
+AXF 2.1.3 is published under Apache-2.0; earlier npm releases retain their
+published terms. Outside a fitted workspace, with no root override, this example
+discovers the bundled manifests in the installed package. `doctor` reports that project root
+separately from the current execution directory. An explicit `AXF_PROJECT_ROOT`
+overrides discovery; an empty directory without an `axf.workspace.json` marker
+has no capabilities. A fitted repository normally adds its own capabilities;
+`echo.say` only proves that the registry, resolver, adapter, and executor are connected.
 
 ## Before and after fitting
 
